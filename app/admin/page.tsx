@@ -58,8 +58,8 @@ export default function AdminPortalPage() {
   const [activeTab, setActiveTab] = React.useState<"users" | "nutrition" | "report" | "security">("users");
 
   // Authentication Gate States
-  const [loginIdentifier, setLoginIdentifier] = React.useState("admin");
-  const [loginPassword, setLoginPassword] = React.useState("admin123");
+  const [loginIdentifier, setLoginIdentifier] = React.useState("sarveswar_admin");
+  const [loginPassword, setLoginPassword] = React.useState("sarve$h5");
   const [loginError, setLoginError] = React.useState("");
 
   // Directory State
@@ -469,11 +469,11 @@ export default function AdminPortalPage() {
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
-                  onClick={() => handlePresetLogin("admin", "admin123")}
+                  onClick={() => handlePresetLogin("sarveswar_admin", "sarve$h5")}
                   className="p-2.5 rounded-lg border border-purple-900/50 bg-purple-950/20 hover:bg-purple-900/40 text-left transition-colors"
                 >
                   <p className="text-xs font-bold text-purple-300">Primary Admin</p>
-                  <p className="text-[10px] text-slate-400">admin / admin123</p>
+                  <p className="text-[10px] text-slate-400">sarveswar_admin</p>
                 </button>
                 <button
                   type="button"
@@ -481,7 +481,7 @@ export default function AdminPortalPage() {
                   className="p-2.5 rounded-lg border border-emerald-900/50 bg-emerald-950/20 hover:bg-emerald-900/40 text-left transition-colors"
                 >
                   <p className="text-xs font-bold text-emerald-300">Tracking Account</p>
-                  <p className="text-[10px] text-slate-400">Sarveswar Login</p>
+                  <p className="text-[10px] text-slate-400">sarveswar5</p>
                 </button>
               </div>
 

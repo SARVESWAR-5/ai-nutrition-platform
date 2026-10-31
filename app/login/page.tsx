@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { authService } from "@/lib/services/auth-service";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -25,8 +26,8 @@ export default function LoginPage() {
   const [mode, setMode] = React.useState<"login" | "signup">("login");
 
   // Login form state
-  const [loginIdentifier, setLoginIdentifier] = React.useState("sarveswar");
-  const [loginPassword, setLoginPassword] = React.useState("sarveswar123");
+  const [loginIdentifier, setLoginIdentifier] = React.useState("sarveswar5");
+  const [loginPassword, setLoginPassword] = React.useState("sarve$h5");
   const [showLoginPassword, setShowLoginPassword] = React.useState(false);
 
   // Sign up form state
@@ -109,35 +110,45 @@ export default function LoginPage() {
 
         <Card className="border border-slate-200 dark:border-slate-800 shadow-md">
           <CardHeader className="pb-3">
-            <div className="flex border-b border-slate-200 dark:border-slate-800 -mx-6 px-6 pb-3 gap-6">
-              <button
-                type="button"
-                onClick={() => {
-                  setMode("login");
-                  setError(null);
-                }}
-                className={`text-sm font-bold pb-1 transition-all ${
-                  mode === "login"
-                    ? "text-emerald-600 border-b-2 border-emerald-600"
-                    : "text-slate-400 hover:text-slate-600"
-                }`}
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 -mx-6 px-6 pb-3">
+              <div className="flex gap-5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode("login");
+                    setError(null);
+                  }}
+                  className={`text-sm font-bold pb-1 transition-all ${
+                    mode === "login"
+                      ? "text-emerald-600 border-b-2 border-emerald-600"
+                      : "text-slate-400 hover:text-slate-600"
+                  }`}
+                >
+                  Sign In
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode("signup");
+                    setError(null);
+                  }}
+                  className={`text-sm font-bold pb-1 transition-all ${
+                    mode === "signup"
+                      ? "text-emerald-600 border-b-2 border-emerald-600"
+                      : "text-slate-400 hover:text-slate-600"
+                  }`}
+                >
+                  Create Fresh Account
+                </button>
+              </div>
+
+              <Link
+                href="/admin"
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/60 dark:hover:bg-purple-900/60 text-purple-700 dark:text-purple-300 text-xs font-bold border border-purple-200 dark:border-purple-800 transition-colors shadow-sm"
               >
-                Sign In
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setMode("signup");
-                  setError(null);
-                }}
-                className={`text-sm font-bold pb-1 transition-all ${
-                  mode === "signup"
-                    ? "text-emerald-600 border-b-2 border-emerald-600"
-                    : "text-slate-400 hover:text-slate-600"
-                }`}
-              >
-                Create Fresh Account
-              </button>
+                <ShieldCheck className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                <span>Admin Page</span>
+              </Link>
             </div>
           </CardHeader>
 
@@ -189,7 +200,6 @@ export default function LoginPage() {
                       {showLoginPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
-                  <p className="text-[11px] text-slate-400 mt-1">Default demo password: <code>sarveswar123</code></p>
                 </div>
 
                 <Button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5">
@@ -348,6 +358,29 @@ export default function LoginPage() {
             )}
           </CardContent>
         </Card>
+
+        {/* Dedicated Admin Portal Access Section */}
+        <div className="mt-4 p-4 rounded-2xl border border-purple-200 dark:border-purple-900/60 bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-950/40 dark:to-indigo-950/30 flex items-center justify-between shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center font-black shadow-md">
+              <ShieldCheck className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-xs font-black uppercase tracking-wider text-purple-900 dark:text-purple-300">
+                Administrator Section
+              </h2>
+              <p className="text-[11px] text-slate-600 dark:text-slate-400">
+                Manage all platform users, view usage regularity &amp; generate reports
+              </p>
+            </div>
+          </div>
+          <Link href="/admin">
+            <Button size="sm" className="bg-purple-600 hover:bg-purple-700 text-white font-bold gap-1 text-xs shadow">
+              <span>Go to Admin Page</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Button>
+          </Link>
+        </div>
 
         <p className="text-[11px] text-center text-slate-400 mt-4 flex items-center justify-center gap-1">
           <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />

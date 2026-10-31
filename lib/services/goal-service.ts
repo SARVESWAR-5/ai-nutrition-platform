@@ -70,8 +70,13 @@ class GoalService {
   }
 
   private getStorageKeys(userId?: string): { revisionsKey: string; targetsKey: string } {
-    const id = userId || (typeof window !== "undefined" ? authService.getCurrentUserId() : "usr-sarveswar-primary");
-    if (id === "usr-sarveswar-primary" || id === "sarveswar") {
+    const id = userId || (typeof window !== "undefined" ? authService.getCurrentUserId() : "usr-sarveswar5-primary");
+    if (
+      id === "usr-sarveswar-primary" ||
+      id === "sarveswar" ||
+      id === "sarveswar5" ||
+      id === "usr-sarveswar5-primary"
+    ) {
       return {
         revisionsKey: STORAGE_GOAL_REVISIONS_KEY,
         targetsKey: "sarveswar_nutrition_targets",
@@ -87,7 +92,11 @@ class GoalService {
     if (typeof window !== "undefined") {
       try {
         const id = authService.getCurrentUserId();
-        const isSarveswar = id === "usr-sarveswar-primary" || id === "sarveswar";
+        const isSarveswar =
+          id === "usr-sarveswar-primary" ||
+          id === "sarveswar" ||
+          id === "sarveswar5" ||
+          id === "usr-sarveswar5-primary";
         const { revisionsKey, targetsKey } = this.getStorageKeys(id);
 
         const stored = localStorage.getItem(revisionsKey);

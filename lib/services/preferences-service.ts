@@ -217,8 +217,13 @@ class PreferencesService {
   }
 
   private getStorageKeys(userId?: string): { prefsKey: string; profileKey: string } {
-    const id = userId || (typeof window !== "undefined" ? authService.getCurrentUserId() : "usr-sarveswar-primary");
-    if (id === "usr-sarveswar-primary" || id === "sarveswar") {
+    const id = userId || (typeof window !== "undefined" ? authService.getCurrentUserId() : "usr-sarveswar5-primary");
+    if (
+      id === "usr-sarveswar-primary" ||
+      id === "sarveswar" ||
+      id === "sarveswar5" ||
+      id === "usr-sarveswar5-primary"
+    ) {
       return {
         prefsKey: STORAGE_PREFS_KEY,
         profileKey: STORAGE_PROFILE_KEY,
@@ -235,7 +240,11 @@ class PreferencesService {
 
     try {
       const id = authService.getCurrentUserId();
-      const isSarveswar = id === "usr-sarveswar-primary" || id === "sarveswar";
+      const isSarveswar =
+        id === "usr-sarveswar-primary" ||
+        id === "sarveswar" ||
+        id === "sarveswar5" ||
+        id === "usr-sarveswar5-primary";
       const { prefsKey, profileKey } = this.getStorageKeys(id);
 
       const stored = localStorage.getItem(prefsKey);

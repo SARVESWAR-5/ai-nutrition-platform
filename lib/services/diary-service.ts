@@ -59,8 +59,8 @@ class DiaryService {
   }
 
   private getStorageKeys(userId?: string): { diaryKey: string; waterKey: string } {
-    const id = userId || (typeof window !== "undefined" ? authService.getCurrentUserId() : "usr-sarveswar-primary");
-    if (id === "usr-sarveswar-primary" || id === "sarveswar") {
+    const id = userId || (typeof window !== "undefined" ? authService.getCurrentUserId() : "usr-sarveswar5-primary");
+    if (id === "usr-sarveswar-primary" || id === "sarveswar" || id === "sarveswar5" || id === "usr-sarveswar5-primary") {
       return {
         diaryKey: STORAGE_DIARY_KEY,
         waterKey: STORAGE_WATER_KEY,

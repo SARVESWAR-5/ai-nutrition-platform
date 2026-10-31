@@ -296,7 +296,11 @@ class CloudSyncService {
     this.isSyncing = true;
 
     try {
-      const isSarveswar = userId === "usr-sarveswar-primary" || userId === "sarveswar";
+      const isSarveswar =
+        userId === "usr-sarveswar-primary" ||
+        userId === "sarveswar" ||
+        userId === "sarveswar5" ||
+        userId === "usr-sarveswar5-primary";
       const diaryKey = isSarveswar ? "sarveswar_diary_entries" : `sarveswar_diary_entries_${userId}`;
       const weightKey = isSarveswar ? "sarveswar_weight_logs" : `sarveswar_weight_logs_${userId}`;
       const prefsKey = isSarveswar ? "sarveswar_user_preferences" : `sarveswar_user_preferences_${userId}`;

@@ -36,8 +36,8 @@ class WeightService {
   }
 
   private getStorageKey(userId?: string): string {
-    const id = userId || (typeof window !== "undefined" ? authService.getCurrentUserId() : "usr-sarveswar-primary");
-    if (id === "usr-sarveswar-primary" || id === "sarveswar") {
+    const id = userId || (typeof window !== "undefined" ? authService.getCurrentUserId() : "usr-sarveswar5-primary");
+    if (id === "usr-sarveswar-primary" || id === "sarveswar" || id === "sarveswar5" || id === "usr-sarveswar5-primary") {
       return STORAGE_WEIGHT_KEY;
     }
     return `${STORAGE_WEIGHT_KEY}_${id}`;
@@ -58,7 +58,12 @@ class WeightService {
         }
 
         // If Sarveswar or default session, seed historical demo measurements
-        if (id === "usr-sarveswar-primary" || id === "sarveswar") {
+        if (
+          id === "usr-sarveswar-primary" ||
+          id === "sarveswar" ||
+          id === "sarveswar5" ||
+          id === "usr-sarveswar5-primary"
+        ) {
           this.measurements = [...DEFAULT_SARVESWAR_MEASUREMENTS];
           window.localStorage.setItem(key, JSON.stringify(this.measurements));
         } else {

@@ -58,8 +58,8 @@ export default function AdminPortalPage() {
   const [activeTab, setActiveTab] = React.useState<"users" | "nutrition" | "report" | "security">("users");
 
   // Authentication Gate States
-  const [loginIdentifier, setLoginIdentifier] = React.useState("sarveswar_admin");
-  const [loginPassword, setLoginPassword] = React.useState("sarve$h5");
+  const [loginIdentifier, setLoginIdentifier] = React.useState("");
+  const [loginPassword, setLoginPassword] = React.useState("");
   const [loginError, setLoginError] = React.useState("");
 
   // Directory State
@@ -445,8 +445,8 @@ export default function AdminPortalPage() {
                   type="text"
                   value={loginIdentifier}
                   onChange={(e) => setLoginIdentifier(e.target.value)}
+                  autoComplete="off"
                   required
-                  placeholder="admin"
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-800 bg-slate-950 text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
                 />
               </div>
@@ -459,8 +459,8 @@ export default function AdminPortalPage() {
                   type="password"
                   value={loginPassword}
                   onChange={(e) => setLoginPassword(e.target.value)}
+                  autoComplete="current-password"
                   required
-                  placeholder="••••••••"
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-800 bg-slate-950 text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
                 />
               </div>
@@ -475,29 +475,7 @@ export default function AdminPortalPage() {
             </form>
 
             <div className="mt-6 pt-5 border-t border-slate-800 text-center">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-2">
-                Quick Login Presets
-              </p>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => handlePresetLogin("sarveswar_admin", "sarve$h5")}
-                  className="p-2.5 rounded-lg border border-purple-900/50 bg-purple-950/20 hover:bg-purple-900/40 text-left transition-colors"
-                >
-                  <p className="text-xs font-bold text-purple-300">Primary Admin</p>
-                  <p className="text-[10px] text-slate-400">sarveswar_admin</p>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => router.push("/login")}
-                  className="p-2.5 rounded-lg border border-emerald-900/50 bg-emerald-950/20 hover:bg-emerald-900/40 text-left transition-colors"
-                >
-                  <p className="text-xs font-bold text-emerald-300">Tracking Account</p>
-                  <p className="text-[10px] text-slate-400">sarveswar5</p>
-                </button>
-              </div>
-
-              <div className="mt-4">
+              <div>
                 <Link href="/" className="text-xs text-slate-500 hover:text-slate-300">
                   Return to Main App
                 </Link>
@@ -719,7 +697,6 @@ export default function AdminPortalPage() {
                         type="text"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder="Search name, handle, or email..."
                         className="pl-9 pr-3.5 py-1.5 rounded-xl border border-slate-800 bg-slate-900 text-xs text-white focus:outline-none focus:ring-2 focus:ring-purple-500 w-64"
                       />
                     </div>
@@ -1313,9 +1290,8 @@ export default function AdminPortalPage() {
                       </label>
                       <input
                         type="text"
-                        defaultValue={currentUser?.name || "Primary Administrator"}
+                        defaultValue={currentUser?.name || ""}
                         onChange={(e) => setAdminCustomName(e.target.value)}
-                        placeholder="Primary Administrator"
                         className="w-full px-3.5 py-2.5 rounded-xl border border-slate-800 bg-slate-950 text-xs text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
                       />
                     </div>
@@ -1326,13 +1302,12 @@ export default function AdminPortalPage() {
                       </label>
                       <input
                         type="text"
-                        defaultValue={currentUser?.username || "admin"}
+                        defaultValue={currentUser?.username || ""}
                         onChange={(e) => setAdminCustomUsername(e.target.value)}
-                        placeholder="your_custom_admin_username"
                         className="w-full px-3.5 py-2.5 rounded-xl border border-slate-800 bg-slate-950 text-xs text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
                       />
                       <p className="text-[10px] text-slate-500 mt-1">
-                        Change from default &quot;admin&quot; to your private chosen username.
+                        Change to your private chosen username.
                       </p>
                     </div>
 
@@ -1344,11 +1319,10 @@ export default function AdminPortalPage() {
                         type="password"
                         value={adminCustomPassword}
                         onChange={(e) => setAdminCustomPassword(e.target.value)}
-                        placeholder="Minimum 6 characters"
                         className="w-full px-3.5 py-2.5 rounded-xl border border-slate-800 bg-slate-950 text-xs text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
                       />
                       <p className="text-[10px] text-slate-500 mt-1">
-                        Change from default &quot;admin123&quot; to your secret password.
+                        Change to your secret password.
                       </p>
                     </div>
 
@@ -1398,12 +1372,9 @@ export default function AdminPortalPage() {
                     <input
                       type="text"
                       value={newName}
-                      onChange={(e) => {
-                        setNewName(e.target.value);
-                        if (!newUsername) setNewUsername(authService.generateUniqueUsername(e.target.value));
-                      }}
+                      onChange={(e) => setNewName(e.target.value)}
+                      autoComplete="off"
                       required
-                      placeholder="e.g. Rahul Sharma"
                       className="w-full px-3 py-2 rounded-xl border border-slate-800 bg-slate-950 text-xs text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
                     />
                   </div>
@@ -1414,8 +1385,8 @@ export default function AdminPortalPage() {
                       type="text"
                       value={newUsername}
                       onChange={(e) => setNewUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
+                      autoComplete="off"
                       required
-                      placeholder="rahul_fit"
                       className="w-full px-3 py-2 rounded-xl border border-slate-800 bg-slate-950 text-xs text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
                     />
                   </div>
@@ -1426,8 +1397,8 @@ export default function AdminPortalPage() {
                       type="email"
                       value={newEmail}
                       onChange={(e) => setNewEmail(e.target.value)}
+                      autoComplete="off"
                       required
-                      placeholder="rahul@example.com"
                       className="w-full px-3 py-2 rounded-xl border border-slate-800 bg-slate-950 text-xs text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
                     />
                   </div>
@@ -1438,8 +1409,8 @@ export default function AdminPortalPage() {
                       type="password"
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
+                      autoComplete="new-password"
                       required
-                      placeholder="Minimum 6 characters"
                       className="w-full px-3 py-2 rounded-xl border border-slate-800 bg-slate-950 text-xs text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
                     />
                   </div>

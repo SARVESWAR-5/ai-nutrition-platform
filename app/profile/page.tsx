@@ -33,16 +33,16 @@ import {
 
 export default function ProfilePage() {
   const [profile, setProfile] = React.useState({
-    name: SARVESWAR_PROFILE_DEFAULTS.name || "Sarveswar",
-    age: 21, // Confirmed by user
-    sex: (SARVESWAR_PROFILE_DEFAULTS.sex || "male") as "male" | "female" | "other",
-    heightCm: SARVESWAR_PROFILE_DEFAULTS.heightCm || 175.5,
-    currentWeightKg: SARVESWAR_PROFILE_DEFAULTS.currentWeightKg || 75.0,
-    targetWeightKg: SARVESWAR_PROFILE_DEFAULTS.targetWeightKg || 75.0,
+    name: "",
+    age: "" as number | "",
+    sex: "male" as "male" | "female" | "other",
+    heightCm: "" as number | "",
+    currentWeightKg: "" as number | "",
+    targetWeightKg: "" as number | "",
     fitnessGoal: "fat_loss" as "fat_loss" | "muscle_gain" | "recomposition" | "maintenance",
     activityLevel: "moderate" as "sedentary" | "light" | "moderate" | "very_active" | "extra_active",
     preferredDinnerCutoff: "19:00",
-    foodsAvoided: ["whey protein", "squid"],
+    foodsAvoided: [] as string[],
     cookingAbility: "home_food" as "home_food" | "cook" | "pg_food" | "mess" | "restaurants",
   });
 
@@ -53,11 +53,15 @@ export default function ProfilePage() {
 
   // Dynamic Evidence-Based Bodybuilding Recalculation (live on every keystroke)
   const protocolsData: BodybuildingProtocolsComparison = React.useMemo(() => {
+    const ageNum = typeof profile.age === "number" ? profile.age : Number(profile.age) || 25;
+    const heightNum = typeof profile.heightCm === "number" ? profile.heightCm : Number(profile.heightCm) || 170;
+    const weightNum = typeof profile.currentWeightKg === "number" ? profile.currentWeightKg : Number(profile.currentWeightKg) || 70;
+
     return calculateBodybuildingProtocols({
-      age: Number(profile.age) || 21,
+      age: ageNum,
       sex: profile.sex,
-      heightCm: Number(profile.heightCm) || 175.5,
-      currentWeightKg: Number(profile.currentWeightKg) || 75.0,
+      heightCm: heightNum,
+      currentWeightKg: weightNum,
       activityLevel: profile.activityLevel,
     });
   }, [profile.age, profile.sex, profile.heightCm, profile.currentWeightKg, profile.activityLevel]);
@@ -76,14 +80,15 @@ export default function ProfilePage() {
   });
 
   const [savedSuccess, setSavedSuccess] = React.useState(false);
-  const [exclusionPrompt, setExclusionPrompt] = React.useState("I don't eat whey protein and squid");
+  const [exclusionPrompt, setExclusionPrompt] = React.useState("");
 
   React.useEffect(() => {
     if (typeof window !== "undefined") {
       try {
         const user = authService.getCurrentUser();
         const id = authService.getCurrentUserId();
-        const profileKey = id === "usr-sarveswar-primary" || id === "sarveswar" ? "sarveswar_user_profile" : `sarveswar_user_profile_${id}`;
+        const isSarveswar = id === "usr-sarveswar-primary" || id === "sarveswar" || id === "usr-sarveswar5-primary" || id === "sarveswar5";
+        const profileKey = isSarveswar ? "sarveswar_user_profile" : `sarveswar_user_profile_${id}`;
         const storedProfile = localStorage.getItem(profileKey);
         if (storedProfile) {
           const parsed = JSON.parse(storedProfile);
@@ -95,11 +100,8 @@ export default function ProfilePage() {
           setProfile((prev) => ({
             ...prev,
             name: user.name,
-            foodsAvoided: user.username === "sarveswar" ? ["whey protein", "squid"] : [],
+            foodsAvoided: [],
           }));
-          if (user.username !== "sarveswar") {
-            setExclusionPrompt("");
-          }
         }
       } catch (e) {
         console.warn("Could not load stored profile:", e);
@@ -238,7 +240,7 @@ export default function ProfilePage() {
                 <input
                   type="number"
                   value={profile.age}
-                  onChange={(e) => setProfile({ ...profile, age: Number(e.target.value) })}
+                  onChange={(e) => setProfile({ ...profile, age: e.target.value === "" ? "" : Number(e.target.value) })}
                   className="w-full px-3 py-2 rounded-lg border border-emerald-400 dark:border-emerald-700 bg-emerald-50/20 dark:bg-emerald-950/20 text-sm font-bold text-emerald-800 dark:text-emerald-300"
                   min={14}
                   max={120}
@@ -265,7 +267,7 @@ export default function ProfilePage() {
                   type="number"
                   step="0.5"
                   value={profile.heightCm}
-                  onChange={(e) => setProfile({ ...profile, heightCm: Number(e.target.value) })}
+                  onChange={(e) => setProfile({ ...profile, heightCm: e.target.value === "" ? "" : Number(e.target.value) })}
                   className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-sm font-semibold"
                   required
                 />
@@ -279,7 +281,7 @@ export default function ProfilePage() {
                   type="number"
                   step="0.1"
                   value={profile.currentWeightKg}
-                  onChange={(e) => setProfile({ ...profile, currentWeightKg: Number(e.target.value) })}
+                  onChange={(e) => setProfile({ ...profile, currentWeightKg: e.target.value === "" ? "" : Number(e.target.value) })}
                   className="w-full px-3 py-2 rounded-lg border-2 border-emerald-500 bg-emerald-50/30 dark:bg-emerald-950/30 text-sm font-black text-emerald-900 dark:text-emerald-100"
                   required
                 />
@@ -291,7 +293,7 @@ export default function ProfilePage() {
                   type="number"
                   step="0.1"
                   value={profile.targetWeightKg}
-                  onChange={(e) => setProfile({ ...profile, targetWeightKg: Number(e.target.value) })}
+                  onChange={(e) => setProfile({ ...profile, targetWeightKg: e.target.value === "" ? "" : Number(e.target.value) })}
                   className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-sm font-semibold"
                 />
               </div>
@@ -360,7 +362,6 @@ export default function ProfilePage() {
                     type="text"
                     value={exclusionPrompt}
                     onChange={(e) => setExclusionPrompt(e.target.value)}
-                    placeholder="e.g. I don't eat whey protein and squid"
                     className="flex-1 px-3 py-2 rounded-lg border border-rose-300 dark:border-rose-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-rose-500"
                   />
                   <Button

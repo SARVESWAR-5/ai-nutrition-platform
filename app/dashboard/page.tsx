@@ -757,7 +757,6 @@ export default function DashboardPage() {
                   type="text"
                   value={prefPrompt}
                   onChange={(e) => setPrefPrompt(e.target.value)}
-                  placeholder="e.g. My dinner cutoff time is 7:00pm, breakfast cutoff is 9:30am, and I don't take whey protein and squid"
                   className="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
                 />
                 <Button
@@ -981,7 +980,6 @@ export default function DashboardPage() {
                         handleAddAvoided(newAvoidInput.trim());
                       }
                     }}
-                    placeholder="+ Add avoided item"
                     className="px-3 py-1 rounded-full border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-purple-500 w-36"
                   />
                   {newAvoidInput.trim() && (

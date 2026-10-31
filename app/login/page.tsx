@@ -26,14 +26,14 @@ export default function LoginPage() {
   const [mode, setMode] = React.useState<"login" | "signup">("login");
 
   // Login form state
-  const [loginIdentifier, setLoginIdentifier] = React.useState("sarveswar5");
-  const [loginPassword, setLoginPassword] = React.useState("sarve$h5");
+  const [loginIdentifier, setLoginIdentifier] = React.useState("");
+  const [loginPassword, setLoginPassword] = React.useState("");
   const [showLoginPassword, setShowLoginPassword] = React.useState(false);
 
   // Sign up form state
-  const [name, setName] = React.useState("Sarveswar");
-  const [username, setUsername] = React.useState("sarveswar_fit");
-  const [email, setEmail] = React.useState("sarveswar@gmail.com");
+  const [name, setName] = React.useState("");
+  const [username, setUsername] = React.useState("");
+  const [email, setEmail] = React.useState("");
   const [signupPassword, setSignupPassword] = React.useState("");
   const [showSignupPassword, setShowSignupPassword] = React.useState(false);
   const [dailyEmailReport, setDailyEmailReport] = React.useState(true);
@@ -58,7 +58,8 @@ export default function LoginPage() {
   }, [username, mode]);
 
   const handleSuggestUsername = () => {
-    const unique = authService.generateUniqueUsername(name || "sarveswar");
+    if (!name.trim()) return;
+    const unique = authService.generateUniqueUsername(name.trim());
     setUsername(unique);
   };
 
@@ -172,7 +173,7 @@ export default function LoginPage() {
                     type="text"
                     value={loginIdentifier}
                     onChange={(e) => setLoginIdentifier(e.target.value)}
-                    placeholder="e.g. sarveswar or sarveswar@health.local"
+                    autoComplete="off"
                     className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-sm font-medium"
                     required
                   />
@@ -188,7 +189,7 @@ export default function LoginPage() {
                       type={showLoginPassword ? "text" : "password"}
                       value={loginPassword}
                       onChange={(e) => setLoginPassword(e.target.value)}
-                      placeholder="Enter your password"
+                      autoComplete="current-password"
                       className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-sm font-medium pr-10"
                       required
                     />
@@ -234,7 +235,7 @@ export default function LoginPage() {
                     type="text"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="e.g. Sarveswar"
+                    autoComplete="off"
                     className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-sm font-medium"
                     required
                   />
@@ -260,7 +261,7 @@ export default function LoginPage() {
                     type="text"
                     value={username}
                     onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/\s+/g, "_"))}
-                    placeholder="e.g. sarveswar_75"
+                    autoComplete="off"
                     className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-sm font-semibold"
                     required
                   />
@@ -302,7 +303,7 @@ export default function LoginPage() {
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="e.g. sarveswar@gmail.com"
+                    autoComplete="off"
                     className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-sm font-medium"
                     required
                   />
@@ -322,7 +323,7 @@ export default function LoginPage() {
                       type={showSignupPassword ? "text" : "password"}
                       value={signupPassword}
                       onChange={(e) => setSignupPassword(e.target.value)}
-                      placeholder="Minimum 6 characters"
+                      autoComplete="new-password"
                       className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-sm font-medium pr-10"
                       minLength={6}
                       required

@@ -520,7 +520,6 @@ export default function AddFoodPage() {
                     type="text"
                     value={librarySearch}
                     onChange={(e) => setLibrarySearch(e.target.value)}
-                    placeholder="Search saved foods (e.g. eggs, chicken, rice)..."
                     className="w-full pl-9 pr-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs focus:ring-2 focus:ring-emerald-500"
                   />
                 </div>
@@ -670,9 +669,8 @@ export default function AddFoodPage() {
                 <textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder="e.g. 'I ate 150 g grilled chicken breast for lunch at 1 PM, cooked with one teaspoon of olive oil' or 'Two boiled eggs, two slices of bread, and one banana at 8:30 AM'..."
                   rows={4}
-                  className="w-full p-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-sm focus:ring-2 focus:ring-emerald-500 transition-all placeholder:text-slate-400"
+                  className="w-full p-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-sm focus:ring-2 focus:ring-emerald-500 transition-all"
                   required
                 />
               </div>

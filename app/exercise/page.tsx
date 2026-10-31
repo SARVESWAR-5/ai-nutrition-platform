@@ -15,10 +15,10 @@ import { Dumbbell, Plus, Flame, Clock, Trash2, Info } from "lucide-react";
 export default function ExerciseTrackerPage() {
   const [selectedDate, setSelectedDate] = React.useState<string>(getLocalTodayDateString());
   const [sessions, setSessions] = React.useState<ExerciseSession[]>([]);
-  const [name, setName] = React.useState("Gym Workout");
+  const [name, setName] = React.useState("");
   const [type, setType] = React.useState<ExerciseType>("strength_training");
-  const [duration, setDuration] = React.useState<number>(45);
-  const [steps, setSteps] = React.useState<number>(0);
+  const [duration, setDuration] = React.useState<number | "">("");
+  const [steps, setSteps] = React.useState<number | "">("");
   const [notes, setNotes] = React.useState("");
 
   const loadSessions = React.useCallback(() => {
@@ -34,16 +34,21 @@ export default function ExerciseTrackerPage() {
 
   const handleLogExercise = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!name.trim()) return;
+    const durNum = typeof duration === "number" ? duration : Number(duration) || 0;
+    const stepNum = typeof steps === "number" ? steps : Number(steps) || 0;
     exerciseService.logSession({
       sessionDate: selectedDate,
       exerciseName: name,
       activityType: type,
-      durationMinutes: duration,
-      steps: steps > 0 ? steps : undefined,
+      durationMinutes: durNum > 0 ? durNum : 30,
+      steps: stepNum > 0 ? stepNum : undefined,
       notes: notes.trim() ? notes : undefined,
     });
     loadSessions();
-    setName("Gym Workout");
+    setName("");
+    setDuration("");
+    setSteps("");
     setNotes("");
   };
 
@@ -133,7 +138,6 @@ export default function ExerciseTrackerPage() {
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g. Chest & Triceps, Leg Day, Evening Walk"
                   className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-semibold"
                   required
                 />
@@ -161,7 +165,7 @@ export default function ExerciseTrackerPage() {
                 <input
                   type="number"
                   value={duration}
-                  onChange={(e) => setDuration(Number(e.target.value))}
+                  onChange={(e) => setDuration(e.target.value === "" ? "" : Number(e.target.value))}
                   min={5}
                   max={300}
                   className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm"
@@ -174,8 +178,7 @@ export default function ExerciseTrackerPage() {
                 <input
                   type="number"
                   value={steps}
-                  onChange={(e) => setSteps(Number(e.target.value))}
-                  placeholder="e.g. 5000"
+                  onChange={(e) => setSteps(e.target.value === "" ? "" : Number(e.target.value))}
                   className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm"
                 />
               </div>

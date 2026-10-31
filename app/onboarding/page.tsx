@@ -29,48 +29,47 @@ export default function OnboardingPage() {
   // Step state: 1: Personal Details, 2: Routine & Exclusions, 3: Goal & Nutrition Targets
   const [step, setStep] = React.useState<1 | 2 | 3>(1);
 
-  // Form State
+  // Form State - start 100% clean so user adds their own values
   const [formData, setFormData] = React.useState({
-    name: "Sarveswar",
-    age: 21,
+    name: "",
+    age: "" as number | "",
     sex: "male" as "male" | "female" | "other",
-    heightCm: 175.5,
-    currentWeightKg: 75.0,
-    targetWeightKg: 75.0,
+    heightCm: "" as number | "",
+    currentWeightKg: "" as number | "",
+    targetWeightKg: "" as number | "",
     cookingAbility: "home_food" as "home_food" | "cook" | "pg_food" | "mess" | "restaurants",
     activityLevel: "moderate" as "sedentary" | "light" | "moderate" | "very_active" | "extra_active",
     preferredDinnerCutoff: "19:00",
-    foodsAvoided: ["whey protein", "squid"],
+    foodsAvoided: [] as string[],
     fitnessGoal: "fat_loss" as "fat_loss" | "muscle_gain" | "maintenance" | "recomposition",
   });
 
   // Natural Language Prompt for Foods Excluded
-  const [exclusionPrompt, setExclusionPrompt] = React.useState("I don't eat whey protein and squid");
+  const [exclusionPrompt, setExclusionPrompt] = React.useState("");
   const [customTagInput, setCustomTagInput] = React.useState("");
 
-  // Populate from authenticated user session on mount
+  // Populate user name from authenticated session on mount
   React.useEffect(() => {
     const user = authService.getCurrentUser();
     if (user) {
-      const isSarveswar = user.username?.toLowerCase() === "sarveswar";
       setFormData((prev) => ({
         ...prev,
-        name: user.name || prev.name,
-        foodsAvoided: isSarveswar ? ["whey protein", "squid"] : [],
+        name: user.name || "",
       }));
-      if (!isSarveswar) {
-        setExclusionPrompt("");
-      }
     }
   }, []);
 
   // Live Bodybuilding Protocols Calculation
   const protocolsData = React.useMemo(() => {
+    const ageNum = typeof formData.age === "number" ? formData.age : Number(formData.age) || 25;
+    const heightNum = typeof formData.heightCm === "number" ? formData.heightCm : Number(formData.heightCm) || 170;
+    const weightNum = typeof formData.currentWeightKg === "number" ? formData.currentWeightKg : Number(formData.currentWeightKg) || 70;
+
     return calculateBodybuildingProtocols({
-      age: Number(formData.age) || 21,
+      age: ageNum,
       sex: formData.sex,
-      heightCm: Number(formData.heightCm) || 175.5,
-      currentWeightKg: Number(formData.currentWeightKg) || 75.0,
+      heightCm: heightNum,
+      currentWeightKg: weightNum,
       activityLevel: formData.activityLevel,
     });
   }, [formData.age, formData.sex, formData.heightCm, formData.currentWeightKg, formData.activityLevel]);
@@ -183,7 +182,7 @@ export default function OnboardingPage() {
                   <input
                     type="number"
                     value={formData.age}
-                    onChange={(e) => setFormData({ ...formData, age: Number(e.target.value) })}
+                    onChange={(e) => setFormData({ ...formData, age: e.target.value === "" ? "" : Number(e.target.value) })}
                     className="w-full px-3 py-2 rounded-lg border border-emerald-400 dark:border-emerald-700 bg-emerald-50/20 text-sm font-bold text-emerald-800 dark:text-emerald-300"
                     min={14}
                     max={100}
@@ -210,7 +209,7 @@ export default function OnboardingPage() {
                     type="number"
                     step="0.5"
                     value={formData.heightCm}
-                    onChange={(e) => setFormData({ ...formData, heightCm: Number(e.target.value) })}
+                    onChange={(e) => setFormData({ ...formData, heightCm: e.target.value === "" ? "" : Number(e.target.value) })}
                     className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-semibold"
                   />
                 </div>
@@ -223,7 +222,7 @@ export default function OnboardingPage() {
                     type="number"
                     step="0.1"
                     value={formData.currentWeightKg}
-                    onChange={(e) => setFormData({ ...formData, currentWeightKg: Number(e.target.value) })}
+                    onChange={(e) => setFormData({ ...formData, currentWeightKg: e.target.value === "" ? "" : Number(e.target.value) })}
                     className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-bold text-slate-900 dark:text-white"
                   />
                 </div>
@@ -236,7 +235,7 @@ export default function OnboardingPage() {
                     type="number"
                     step="0.1"
                     value={formData.targetWeightKg}
-                    onChange={(e) => setFormData({ ...formData, targetWeightKg: Number(e.target.value) })}
+                    onChange={(e) => setFormData({ ...formData, targetWeightKg: e.target.value === "" ? "" : Number(e.target.value) })}
                     className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-semibold"
                   />
                 </div>
@@ -312,7 +311,6 @@ export default function OnboardingPage() {
                     type="text"
                     value={exclusionPrompt}
                     onChange={(e) => setExclusionPrompt(e.target.value)}
-                    placeholder="e.g. I don't eat whey protein and squid"
                     className="flex-1 px-3 py-2 rounded-lg border border-rose-300 dark:border-rose-800 bg-white dark:bg-slate-900 text-sm focus:ring-2 focus:ring-rose-500"
                   />
                   <Button

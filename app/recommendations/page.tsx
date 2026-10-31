@@ -282,7 +282,6 @@ export default function RecommendationsPage() {
                       showStatus(`Excluded "${newAvoidInput.trim()}" from AI recommendations.`);
                     }
                   }}
-                  placeholder="+ Add avoided food"
                   className="px-2 py-1 rounded-lg border border-purple-200 dark:border-purple-800 bg-white dark:bg-slate-900 text-[11px] text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-purple-500 w-full"
                 />
               </div>
@@ -334,7 +333,6 @@ export default function RecommendationsPage() {
                 <textarea
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
-                  placeholder="Ask anything: 'Suggest five high-protein dinners under 600 kcal', 'PG meals before 7 PM', 'What should I eat with 40g protein left today?'..."
                   rows={3}
                   className="w-full p-3 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm focus:ring-2 focus:ring-purple-500"
                 />

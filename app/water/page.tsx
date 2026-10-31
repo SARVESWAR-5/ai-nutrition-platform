@@ -132,7 +132,6 @@ export default function WaterTrackerPage() {
                 type="number"
                 value={customMl}
                 onChange={(e) => setCustomMl(e.target.value)}
-                placeholder="Custom ml"
                 className="w-32 px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-semibold"
                 min={50}
                 max={5000}

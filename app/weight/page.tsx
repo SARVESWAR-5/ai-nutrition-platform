@@ -19,11 +19,7 @@ export default function WeightTrackerPage() {
   const loadData = React.useCallback(() => {
     const list = weightService.getAllMeasurements();
     setMeasurements([...list]);
-    const currentStats = weightService.getProgressStats();
-    if (currentStats.currentWeight && !weight) {
-      setWeight(currentStats.currentWeight.toString());
-    }
-  }, [weight]);
+  }, []);
 
   React.useEffect(() => {
     loadData();
@@ -146,7 +142,6 @@ export default function WeightTrackerPage() {
                   step="0.1"
                   value={weight}
                   onChange={(e) => setWeight(e.target.value)}
-                  placeholder="e.g. 70.5"
                   className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-bold text-emerald-600"
                   required
                 />
@@ -159,7 +154,6 @@ export default function WeightTrackerPage() {
                   step="0.5"
                   value={waist}
                   onChange={(e) => setWaist(e.target.value)}
-                  placeholder="Optional"
                   className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm"
                 />
               </div>
@@ -171,7 +165,6 @@ export default function WeightTrackerPage() {
                   step="0.1"
                   value={bodyFat}
                   onChange={(e) => setBodyFat(e.target.value)}
-                  placeholder="Optional"
                   className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm"
                 />
               </div>
@@ -181,7 +174,6 @@ export default function WeightTrackerPage() {
                   type="text"
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Optional notes: e.g. weighed after morning gym"
                   className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm"
                 />
               </div>

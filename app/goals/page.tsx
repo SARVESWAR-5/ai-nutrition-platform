@@ -192,7 +192,6 @@ export default function GoalsPage() {
                       type="text"
                       value={reason}
                       onChange={(e) => setReason(e.target.value)}
-                      placeholder="e.g. Started winter bulk, or switched to aggressive cut..."
                       className="w-full p-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-medium text-slate-900 dark:text-white"
                       required
                     />

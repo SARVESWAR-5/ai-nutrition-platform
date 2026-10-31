@@ -572,6 +572,10 @@ class AuthService {
     users[idx] = { ...users[idx], ...updates };
     localStorage.setItem(USERS_REGISTRY_KEY, JSON.stringify(users));
 
+    if (cloudSyncService.isAvailable()) {
+      cloudSyncService.pushUserAccount(users[idx]).catch(() => {});
+    }
+
     if (this.currentUser?.id === id) {
       this.currentUser = {
         ...this.currentUser,

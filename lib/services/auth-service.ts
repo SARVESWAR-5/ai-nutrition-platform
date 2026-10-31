@@ -95,7 +95,15 @@ class AuthService {
       usageTimingHabit: "Breakfast & Dinner (Active Tracking)",
     };
 
-    const registry = this.getUsersRegistry();
+    // Purge any old/deleted test accounts from local browser storage
+    const registry = this.getUsersRegistry().filter(
+      (u) =>
+        u.username.toLowerCase() !== "admin" &&
+        u.username.toLowerCase() !== "sarveswar" &&
+        u.username.toLowerCase() !== "krishna" &&
+        !u.username.toLowerCase().includes("sabapathi")
+    );
+
     let changed = false;
 
     // Ensure Primary Admin (sarveswar_admin) exists
@@ -112,48 +120,45 @@ class AuthService {
       changed = true;
     }
 
-    // Also ensure admin and sarveswar exist for compatibility
-    if (!registry.some((u) => u.username.toLowerCase() === "admin")) {
-      registry.push({
-        id: "usr-admin-legacy",
-        name: "Primary Administrator",
-        username: "admin",
-        email: "admin@health.local",
-        passwordHash: hashPassword("admin123"),
-        isOnboarded: true,
-        dailyEmailReportEnabled: true,
-        createdAt: new Date().toISOString(),
-        role: "primary_admin",
-        lastActiveAt: new Date().toISOString(),
-        activeStreakDays: 14,
-        totalFoodLogs: 0,
-        usageTimingHabit: "System Management (Daily)",
-      });
-      changed = true;
+    // Offline / unit test fixtures (only when Supabase cloud is not configured)
+    if (!cloudSyncService.isAvailable()) {
+      if (!registry.some((u) => u.username.toLowerCase() === "admin")) {
+        registry.push({
+          id: "usr-admin-primary",
+          name: "Primary Administrator",
+          username: "admin",
+          email: "admin@health.local",
+          passwordHash: hashPassword("admin123"),
+          isOnboarded: true,
+          dailyEmailReportEnabled: true,
+          createdAt: new Date().toISOString(),
+          role: "primary_admin",
+          lastActiveAt: new Date().toISOString(),
+          activeStreakDays: 14,
+          totalFoodLogs: 0,
+          usageTimingHabit: "System Management (Daily)",
+        });
+      }
+      if (!registry.some((u) => u.username.toLowerCase() === "sarveswar")) {
+        registry.push({
+          id: "usr-sarveswar-primary",
+          name: "Sarveswar",
+          username: "sarveswar",
+          email: "sarveswar@health.local",
+          passwordHash: hashPassword("sarveswar123"),
+          isOnboarded: true,
+          dailyEmailReportEnabled: true,
+          createdAt: "2026-10-29T08:00:00.000Z",
+          role: "user",
+          lastActiveAt: new Date().toISOString(),
+          activeStreakDays: 3,
+          totalFoodLogs: 12,
+          usageTimingHabit: "Breakfast (08:30) & Dinner (18:45 IST)",
+        });
+      }
     }
 
-    if (!registry.some((u) => u.username.toLowerCase() === "sarveswar")) {
-      registry.push({
-        id: "usr-sarveswar-primary",
-        name: "Sarveswar",
-        username: "sarveswar",
-        email: "sarveswar@health.local",
-        passwordHash: hashPassword("sarve$h5"),
-        isOnboarded: true,
-        dailyEmailReportEnabled: true,
-        createdAt: "2026-10-29T08:00:00.000Z",
-        role: "user",
-        lastActiveAt: new Date().toISOString(),
-        activeStreakDays: 3,
-        totalFoodLogs: 12,
-        usageTimingHabit: "Breakfast & Dinner (Active Tracking)",
-      });
-      changed = true;
-    }
-
-    if (changed) {
-      localStorage.setItem(USERS_REGISTRY_KEY, JSON.stringify(registry));
-    }
+    localStorage.setItem(USERS_REGISTRY_KEY, JSON.stringify(registry));
   }
 
   public getCurrentUser(): UserSession | null {

@@ -103,24 +103,29 @@ export default function AdminPortalPage() {
   const [newEmailSub, setNewEmailSub] = React.useState(true);
   const [addError, setAddError] = React.useState("");
 
-  const refreshData = React.useCallback(() => {
+  const refreshData = React.useCallback(async () => {
     const user = authService.getCurrentUser();
     setCurrentUser(user);
 
     if (authService.isAdmin()) {
+      authService.ensureDefaultAccounts();
       if (cloudSyncService.isAvailable()) {
-        cloudSyncService.pullAllUsers().then((cloudUsers) => {
+        try {
+          const cloudUsers = await cloudSyncService.pullAllUsers();
           if (cloudUsers && cloudUsers.length > 0) {
             authService.syncWithCloudUsers(cloudUsers);
             setUsers(cloudUsers);
-            if (cloudUsers.length > 0 && !selectedInspectUserId) {
+            if (!selectedInspectUserId) {
               const preferred =
                 cloudUsers.find((u) => u.username.toLowerCase() === "sarveswar5") || cloudUsers[0];
               setSelectedInspectUserId(preferred.id);
               setReportUserId(preferred.id);
             }
+            return;
           }
-        });
+        } catch (e) {
+          console.warn("Could not load cloud users:", e);
+        }
       }
 
       const allUsers = authService.getAllUsers();
@@ -139,15 +144,6 @@ export default function AdminPortalPage() {
     setMounted(true);
     authService.ensureDefaultAccounts();
     refreshData();
-
-    if (authService.isAdmin() && cloudSyncService.isAvailable()) {
-      cloudSyncService.pullAllUsers().then((cloudUsers) => {
-        if (cloudUsers && cloudUsers.length > 0) {
-          authService.mergeCloudUsers(cloudUsers);
-          refreshData();
-        }
-      });
-    }
 
     const handleAuthChange = () => {
       refreshData();

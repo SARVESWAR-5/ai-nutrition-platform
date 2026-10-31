@@ -287,39 +287,96 @@ class CloudSyncService {
   }
 
   /**
-   * Full Synchronization Runner:
-   * Called automatically when user signs in or opens the app on any device.
+   * Bi-directional Synchronization Runner:
+   * 1. Pushes any offline/localhost data up to Supabase Cloud so nothing is lost.
+   * 2. Pulls any cloud data down to local device so phone and laptop stay in harmony.
    */
   public async fullSync(userId: string): Promise<void> {
     if (this.isSyncing || !this.isAvailable() || !userId) return;
     this.isSyncing = true;
 
     try {
-      // 1. Sync preferences
-      const cloudPrefs = await this.pullPreferences(userId);
-      if (cloudPrefs && typeof window !== "undefined") {
-        const isSarveswar = userId === "usr-sarveswar-primary" || userId === "sarveswar";
-        const key = isSarveswar ? "sarveswar_user_preferences" : `sarveswar_user_preferences_${userId}`;
-        localStorage.setItem(key, JSON.stringify(cloudPrefs));
-        window.dispatchEvent(new CustomEvent("sarveswar-preferences-updated"));
+      const isSarveswar = userId === "usr-sarveswar-primary" || userId === "sarveswar";
+      const diaryKey = isSarveswar ? "sarveswar_diary_entries" : `sarveswar_diary_entries_${userId}`;
+      const weightKey = isSarveswar ? "sarveswar_weight_logs" : `sarveswar_weight_logs_${userId}`;
+      const prefsKey = isSarveswar ? "sarveswar_user_preferences" : `sarveswar_user_preferences_${userId}`;
+
+      // 1. BI-DIRECTIONAL FOOD SYNC
+      let localFoods: FoodLogItem[] = [];
+      if (typeof window !== "undefined") {
+        try {
+          const raw = localStorage.getItem(diaryKey);
+          if (raw) localFoods = JSON.parse(raw);
+        } catch {}
       }
 
-      // 2. Sync food diary
       const cloudFoods = await this.pullFoodEntries(userId);
-      if (cloudFoods.length > 0 && typeof window !== "undefined") {
-        const isSarveswar = userId === "usr-sarveswar-primary" || userId === "sarveswar";
-        const key = isSarveswar ? "sarveswar_diary_entries" : `sarveswar_diary_entries_${userId}`;
-        localStorage.setItem(key, JSON.stringify(cloudFoods));
+
+      // Upload local items to cloud if missing
+      const cloudFoodIds = new Set(cloudFoods.map((f) => f.id));
+      for (const item of localFoods) {
+        if (!cloudFoodIds.has(item.id)) {
+          await this.pushFoodEntry(userId, item);
+        }
+      }
+
+      // Download cloud items to local if missing
+      const localFoodIds = new Set(localFoods.map((f) => f.id));
+      let mergedFoods = [...localFoods];
+      for (const item of cloudFoods) {
+        if (!localFoodIds.has(item.id)) {
+          mergedFoods.push(item);
+        }
+      }
+      if (typeof window !== "undefined" && (mergedFoods.length > localFoods.length || (localFoods.length === 0 && cloudFoods.length > 0))) {
+        const finalFoods = cloudFoods.length > 0 && localFoods.length === 0 ? cloudFoods : mergedFoods;
+        localStorage.setItem(diaryKey, JSON.stringify(finalFoods));
         window.dispatchEvent(new CustomEvent("sarveswar-diary-updated"));
       }
 
-      // 3. Sync weights
+      // 2. BI-DIRECTIONAL WEIGHT SYNC
+      let localWeights: WeightMeasurement[] = [];
+      if (typeof window !== "undefined") {
+        try {
+          const raw = localStorage.getItem(weightKey);
+          if (raw) localWeights = JSON.parse(raw);
+        } catch {}
+      }
+
       const cloudWeights = await this.pullWeightMeasurements(userId);
-      if (cloudWeights.length > 0 && typeof window !== "undefined") {
-        const isSarveswar = userId === "usr-sarveswar-primary" || userId === "sarveswar";
-        const key = isSarveswar ? "sarveswar_weight_logs" : `sarveswar_weight_logs_${userId}`;
-        localStorage.setItem(key, JSON.stringify(cloudWeights));
+      const cloudWeightIds = new Set(cloudWeights.map((w) => w.id));
+      for (const w of localWeights) {
+        if (!cloudWeightIds.has(w.id)) {
+          await this.pushWeightMeasurement(userId, w);
+        }
+      }
+
+      const localWeightIds = new Set(localWeights.map((w) => w.id));
+      let mergedWeights = [...localWeights];
+      for (const w of cloudWeights) {
+        if (!localWeightIds.has(w.id)) {
+          mergedWeights.push(w);
+        }
+      }
+      if (typeof window !== "undefined" && (mergedWeights.length > localWeights.length || (localWeights.length === 0 && cloudWeights.length > 0))) {
+        const finalWeights = cloudWeights.length > 0 && localWeights.length === 0 ? cloudWeights : mergedWeights;
+        localStorage.setItem(weightKey, JSON.stringify(finalWeights));
         window.dispatchEvent(new CustomEvent("sarveswar-weight-updated"));
+      }
+
+      // 3. PREFERENCES & CUTOFFS SYNC
+      if (typeof window !== "undefined") {
+        const localPrefsRaw = localStorage.getItem(prefsKey);
+        const cloudPrefs = await this.pullPreferences(userId);
+        if (localPrefsRaw && !cloudPrefs) {
+          try {
+            const parsedPrefs = JSON.parse(localPrefsRaw);
+            await this.pushPreferences(userId, parsedPrefs);
+          } catch {}
+        } else if (cloudPrefs) {
+          localStorage.setItem(prefsKey, JSON.stringify(cloudPrefs));
+          window.dispatchEvent(new CustomEvent("sarveswar-preferences-updated"));
+        }
       }
     } catch (e) {
       console.warn("Cloud sync error:", e);

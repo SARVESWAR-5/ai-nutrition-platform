@@ -402,24 +402,14 @@ class AuthService {
     }
   }
 
-  public mergeCloudUsers(cloudUsers: UserAccount[]): void {
+  public syncWithCloudUsers(cloudUsers: UserAccount[]): void {
     if (typeof window === "undefined" || !cloudUsers || cloudUsers.length === 0) return;
-    const local = this.getUsersRegistry();
-    let modified = false;
-    for (const c of cloudUsers) {
-      const idx = local.findIndex((l) => l.id === c.id);
-      if (idx === -1) {
-        local.push(c);
-        modified = true;
-      } else {
-        local[idx] = { ...local[idx], ...c };
-        modified = true;
-      }
-    }
-    if (modified) {
-      localStorage.setItem(USERS_REGISTRY_KEY, JSON.stringify(local));
-      window.dispatchEvent(new CustomEvent("sarveswar-auth-changed"));
-    }
+    localStorage.setItem(USERS_REGISTRY_KEY, JSON.stringify(cloudUsers));
+    window.dispatchEvent(new CustomEvent("sarveswar-auth-changed"));
+  }
+
+  public mergeCloudUsers(cloudUsers: UserAccount[]): void {
+    this.syncWithCloudUsers(cloudUsers);
   }
 
   // ----------------------------------------------------
@@ -575,12 +565,20 @@ class AuthService {
     const target = users.find((u) => u.id === id);
     if (!target) return { success: false, error: "User not found" };
 
-    if (target.role === "primary_admin" || target.username.toLowerCase() === "admin") {
+    if (
+      target.role === "primary_admin" ||
+      target.username.toLowerCase() === "admin" ||
+      target.username.toLowerCase() === "sarveswar_admin"
+    ) {
       return { success: false, error: "Cannot delete the Primary Administrator account." };
     }
 
     const filtered = users.filter((u) => u.id !== id);
     localStorage.setItem(USERS_REGISTRY_KEY, JSON.stringify(filtered));
+
+    if (cloudSyncService.isAvailable()) {
+      cloudSyncService.deleteUserAccount(id).catch(() => {});
+    }
 
     // Clean up local personal partitions
     if (typeof window !== "undefined") {

@@ -108,6 +108,19 @@ class CloudSyncService {
   }
 
   /**
+   * Deletes a user account from Supabase cloud.
+   */
+  public async deleteUserAccount(userId: string): Promise<boolean> {
+    if (!this.isAvailable()) return false;
+    try {
+      const { error } = await supabase.from("platform_users").delete().eq("id", userId);
+      return !error;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
    * Pushes a single food entry to Supabase cloud.
    */
   public async pushFoodEntry(userId: string, entry: FoodLogItem): Promise<boolean> {

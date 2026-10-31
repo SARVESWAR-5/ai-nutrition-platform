@@ -108,11 +108,27 @@ export default function AdminPortalPage() {
     setCurrentUser(user);
 
     if (authService.isAdmin()) {
+      if (cloudSyncService.isAvailable()) {
+        cloudSyncService.pullAllUsers().then((cloudUsers) => {
+          if (cloudUsers && cloudUsers.length > 0) {
+            authService.syncWithCloudUsers(cloudUsers);
+            setUsers(cloudUsers);
+            if (cloudUsers.length > 0 && !selectedInspectUserId) {
+              const preferred =
+                cloudUsers.find((u) => u.username.toLowerCase() === "sarveswar5") || cloudUsers[0];
+              setSelectedInspectUserId(preferred.id);
+              setReportUserId(preferred.id);
+            }
+          }
+        });
+      }
+
       const allUsers = authService.getAllUsers();
       setUsers(allUsers);
       if (allUsers.length > 0 && !selectedInspectUserId) {
         // Default to Sarveswar's tracking account or first standard user for inspection
-        const preferred = allUsers.find((u) => u.username.toLowerCase() === "sarveswar") || allUsers[0];
+        const preferred =
+          allUsers.find((u) => u.username.toLowerCase() === "sarveswar5") || allUsers[0];
         setSelectedInspectUserId(preferred.id);
         setReportUserId(preferred.id);
       }

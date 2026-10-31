@@ -198,6 +198,19 @@ class WeightService {
       isNewUser: false,
     };
   }
+
+  public getUserMeasurements(userId: string): WeightMeasurement[] {
+    if (typeof window === "undefined") return [];
+    try {
+      const key = this.getStorageKey(userId);
+      const stored = window.localStorage.getItem(key);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch {}
+    return [];
+  }
 }
 
 export const weightService = new WeightService();

@@ -345,3 +345,20 @@ export function calculateMifflinStJeorEnergy(profile: {
     ],
   };
 }
+
+export function getUserProfileData(userId?: string) {
+  if (!userId || typeof window === "undefined") return null;
+  try {
+    const isSarveswar =
+      userId === "usr-sarveswar-primary" ||
+      userId === "sarveswar" ||
+      userId === "sarveswar5" ||
+      userId === "usr-sarveswar5-primary";
+    const profileKey = isSarveswar ? "sarveswar_user_profile" : `sarveswar_user_profile_${userId}`;
+    const stored = localStorage.getItem(profileKey);
+    if (stored) {
+      return JSON.parse(stored);
+    }
+  } catch {}
+  return null;
+}

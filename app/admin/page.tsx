@@ -13,6 +13,11 @@ import {
 import { cloudSyncService } from "@/lib/services/cloud-sync-service";
 import { diaryService, FoodLogItem } from "@/lib/services/diary-service";
 import { preferencesService, formatTime12h } from "@/lib/services/preferences-service";
+import { waterService } from "@/lib/services/water-service";
+import { exerciseService } from "@/lib/services/exercise-service";
+import { weightService } from "@/lib/services/weight-service";
+import { goalService } from "@/lib/services/goal-service";
+import { getUserProfileData } from "@/lib/services/profile-service";
 import { getLocalTodayDateString } from "@/lib/date/date-service";
 import {
   Shield,
@@ -45,8 +50,15 @@ import {
   Flame,
   Utensils,
   ChevronRight,
+  ChevronDown,
   Award,
   Save,
+  Droplets,
+  Dumbbell,
+  Scale,
+  Target,
+  FileText,
+  Layers,
 } from "lucide-react";
 
 export default function AdminPortalPage() {
@@ -74,10 +86,13 @@ export default function AdminPortalPage() {
 
   // Tab 2: User Nutrition Inspector State
   const [selectedInspectUserId, setSelectedInspectUserId] = React.useState<string>("");
+  const [inspectSection, setInspectSection] = React.useState<"all" | "today" | "history" | "water" | "exercise" | "weight">("all");
+  const [historyExpandedDate, setHistoryExpandedDate] = React.useState<string | null>(null);
 
   // Tab 3: Per-User Date Report Generator State
   const [reportUserId, setReportUserId] = React.useState<string>("");
   const [reportDate, setReportDate] = React.useState<string>(getLocalTodayDateString());
+  const [reportType, setReportType] = React.useState<"single_day" | "all_days">("single_day");
   const [generatedReport, setGeneratedReport] = React.useState<{
     user: UserAccount;
     date: string;
@@ -85,6 +100,25 @@ export default function AdminPortalPage() {
     totals: { calories: number; protein: number; carbs: number; fat: number; fibre: number };
     targets: { calories: number; protein: number; carbs: number; fat: number; fibre: number; waterMl: number };
     compliance: { metCalories: boolean; metProtein: boolean; followedDinnerCutoff: boolean };
+  } | null>(null);
+
+  const [allDaysReport, setAllDaysReport] = React.useState<{
+    user: UserAccount;
+    totalDays: number;
+    totalCalories: number;
+    avgCalories: number;
+    avgProtein: number;
+    avgWater: number;
+    dinnerCompliancePct: number;
+    days: Array<{
+      date: string;
+      totals: { calories: number; protein: number; carbs: number; fat: number; fibre: number };
+      waterMl: number;
+      dinnerTime: string | null;
+      dinnerFollowedCutoff: boolean;
+      itemsCount: number;
+      items: FoodLogItem[];
+    }>;
   } | null>(null);
 
   // Tab 4: Primary Admin Credentials Form State
@@ -310,53 +344,117 @@ export default function AdminPortalPage() {
     setTimeout(() => setAdminCredsSuccess(false), 4000);
   };
 
-  // Generate User Nutrition Report for Date
+  // Generate User Nutrition Report for Date or All Days
   const handleGenerateReport = () => {
-    const targetUser = users.find((u) => u.id === reportUserId);
+    const targetUser = users.find((u) => u.id === reportUserId) || users[0];
     if (!targetUser) return;
 
-    const entries = diaryService.getEntriesForUser(targetUser.id, reportDate);
-    const totals = diaryService.getUserDailyTotals(targetUser.id, reportDate);
+    const userPrefs = preferencesService.getUserPreferences(targetUser.id);
+    const dinnerCutoff = userPrefs.cutoffs?.dinner || "19:00";
 
-    // Default target baseline (Sarveswar standard recomposition targets)
-    const targets = {
-      calories: 2400,
-      protein: 150,
-      carbs: 290,
-      fat: 70,
-      fibre: 35,
-      waterMl: 3000,
-    };
+    if (reportType === "single_day") {
+      const entries = diaryService.getEntriesForUser(targetUser.id, reportDate);
+      const totals = diaryService.getUserDailyTotals(targetUser.id, reportDate);
+      const userTargets = goalService.getUserTargets(targetUser.id);
 
-    // Evaluate compliance
-    const metCalories = totals.calories >= targets.calories * 0.9 && totals.calories <= targets.calories * 1.1;
-    const metProtein = totals.protein >= targets.protein * 0.95;
+      const targets = {
+        calories: userTargets.calories || 2400,
+        protein: userTargets.protein || 150,
+        carbs: userTargets.carbs || 290,
+        fat: userTargets.fat || 70,
+        fibre: userTargets.fibre || 35,
+        waterMl: userTargets.waterMl || 3000,
+      };
 
-    // Check if dinner items were logged before the user's preferred cutoff
-    const userPrefs = preferencesService.getPreferences();
-    const dinnerCutoff = userPrefs.cutoffs.dinner || "19:00";
-    const dinnerItems = entries.filter((e) => e.mealCategory === "dinner");
-    const followedDinnerCutoff = dinnerItems.length === 0 || dinnerItems.every((item) => {
-      try {
-        const timePart = item.consumedAt.slice(11, 16);
-        return timePart <= dinnerCutoff;
-      } catch {
-        return true;
-      }
-    });
+      const metCalories = totals.calories >= targets.calories * 0.9 && totals.calories <= targets.calories * 1.1;
+      const metProtein = totals.protein >= targets.protein * 0.95;
 
-    setGeneratedReport({
-      user: targetUser,
-      date: reportDate,
-      entries,
-      totals,
-      targets,
-      compliance: {
-        metCalories,
-        metProtein,
-        followedDinnerCutoff,
-      },
-    });
+      const dinnerItems = entries.filter((e) => e.mealCategory === "dinner");
+      const followedDinnerCutoff = dinnerItems.length === 0 || dinnerItems.every((item) => {
+        try {
+          const timePart = item.consumedAt.slice(11, 16);
+          return timePart <= dinnerCutoff;
+        } catch {
+          return true;
+        }
+      });
+
+      setGeneratedReport({
+        user: targetUser,
+        date: reportDate,
+        entries,
+        totals,
+        targets,
+        compliance: {
+          metCalories,
+          metProtein,
+          followedDinnerCutoff,
+        },
+      });
+      setAllDaysReport(null);
+    } else {
+      // All days multi-day cumulative report
+      const allEntries = diaryService.getEntriesForUser(targetUser.id);
+      const uniqueDates = Array.from(new Set(allEntries.map((e) => e.diaryDate))).sort().reverse();
+
+      let totalCal = 0;
+      let totalProt = 0;
+      let totalWat = 0;
+      let dinnerDaysCount = 0;
+      let compliantDinnerDaysCount = 0;
+
+      const daysData = uniqueDates.map((d) => {
+        const dayEntries = allEntries.filter((e) => e.diaryDate === d);
+        const dayTotals = diaryService.getUserDailyTotals(targetUser.id, d);
+        const dayWater = waterService.getUserWaterForDate(targetUser.id, d);
+        const dinnerItems = dayEntries.filter((e) => e.mealCategory === "dinner");
+
+        let dinnerTime: string | null = null;
+        let followed = true;
+
+        if (dinnerItems.length > 0) {
+          dinnerDaysCount++;
+          dinnerTime = dinnerItems[dinnerItems.length - 1].consumedAt.slice(11, 16);
+          followed = dinnerItems.every((item) => {
+            try {
+              return item.consumedAt.slice(11, 16) <= dinnerCutoff;
+            } catch {
+              return true;
+            }
+          });
+          if (followed) compliantDinnerDaysCount++;
+        }
+
+        totalCal += dayTotals.calories;
+        totalProt += dayTotals.protein;
+        totalWat += dayWater;
+
+        return {
+          date: d,
+          totals: dayTotals,
+          waterMl: dayWater,
+          dinnerTime,
+          dinnerFollowedCutoff: followed,
+          itemsCount: dayEntries.length,
+          items: dayEntries,
+        };
+      });
+
+      const count = Math.max(1, uniqueDates.length);
+      const dinnerCompliance = dinnerDaysCount > 0 ? Math.round((compliantDinnerDaysCount / dinnerDaysCount) * 100) : 100;
+
+      setAllDaysReport({
+        user: targetUser,
+        totalDays: uniqueDates.length,
+        totalCalories: totalCal,
+        avgCalories: Math.round(totalCal / count),
+        avgProtein: Math.round((totalProt / count) * 10) / 10,
+        avgWater: Math.round(totalWat / count),
+        dinnerCompliancePct: dinnerCompliance,
+        days: daysData,
+      });
+      setGeneratedReport(null);
+    }
   };
 
   // Export Users CSV
@@ -575,7 +673,7 @@ export default function AdminPortalPage() {
               }`}
             >
               <Activity className="w-4 h-4" />
-              <span>2. User Nutrition &amp; Diary Inspector {!isPrimary && "(Locked)"}</span>
+              <span>2. User 360° Data &amp; Intake Inspector {!isPrimary && "(Locked)"}</span>
             </button>
 
             <button
@@ -595,7 +693,7 @@ export default function AdminPortalPage() {
               }`}
             >
               <Printer className="w-4 h-4" />
-              <span>3. Date Report Generator {!isPrimary && "(Locked)"}</span>
+              <span>3. Date &amp; All-Days Report Generator {!isPrimary && "(Locked)"}</span>
             </button>
 
             <button
@@ -829,10 +927,10 @@ export default function AdminPortalPage() {
                                       setActiveTab("nutrition");
                                     }}
                                     className="px-2.5 py-1 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium flex items-center gap-1 transition-colors"
-                                    title="View full nutrient intake, macros, and food diary"
+                                    title="View complete 360° user data, history, cutoffs, and diary"
                                   >
                                     <Activity className="w-3.5 h-3.5 text-emerald-400" />
-                                    <span>Nutrients</span>
+                                    <span>Audit 360°</span>
                                   </button>
 
                                   {/* Generate Date Report (Primary Admin only) */}
@@ -892,7 +990,7 @@ export default function AdminPortalPage() {
             )}
 
             {/* -------------------------------------------------------------- */}
-            {/* TAB 2: USER NUTRITION & FOOD DIARY INSPECTOR                    */}
+            {/* TAB 2: USER 360° DATA & AUDIT INSPECTOR                        */}
             {/* -------------------------------------------------------------- */}
             {activeTab === "nutrition" && (
               <div className="space-y-6">
@@ -900,10 +998,10 @@ export default function AdminPortalPage() {
                   <div>
                     <h2 className="text-base font-bold text-white flex items-center gap-2">
                       <Activity className="w-5 h-5 text-emerald-400" />
-                      <span>User Nutrition &amp; Macro Inspector (Primary Admin)</span>
+                      <span>User 360° Data &amp; Intake Audit Inspector</span>
                     </h2>
                     <p className="text-xs text-slate-400 mt-0.5">
-                      View authoritative nutrient totals, daily remaining budget, and itemized food diary logs for any user.
+                      Full administrative inspection: Profile, targets, time cutoffs, dietary exclusions, today&apos;s food, full history, water, workouts &amp; weigh-ins.
                     </p>
                   </div>
 
@@ -923,105 +1021,561 @@ export default function AdminPortalPage() {
                   </div>
                 </div>
 
-                {/* Macro Nutrients Comparison Cards */}
                 {(() => {
                   const targetUser = users.find((u) => u.id === selectedInspectUserId) || users[0];
+                  if (!targetUser) {
+                    return (
+                      <div className="p-8 text-center text-slate-500 text-xs bg-slate-900 border border-slate-800 rounded-2xl">
+                        No user selected or registered.
+                      </div>
+                    );
+                  }
+
                   const todayStr = getLocalTodayDateString();
-                  const totals = diaryService.getUserDailyTotals(targetUser?.id, todayStr);
-                  const entries = diaryService.getEntriesForUser(targetUser?.id, todayStr);
+                  const totals = diaryService.getUserDailyTotals(targetUser.id, todayStr);
+                  const todayEntries = diaryService.getEntriesForUser(targetUser.id, todayStr);
+                  const allEntries = diaryService.getEntriesForUser(targetUser.id);
+                  const userPrefs = preferencesService.getUserPreferences(targetUser.id);
+                  const userTargets = goalService.getUserTargets(targetUser.id);
+                  const userProfile = getUserProfileData(targetUser.id);
+                  const userWater = waterService.getUserLogs(targetUser.id);
+                  const todayWater = waterService.getUserWaterForDate(targetUser.id, todayStr);
+                  const userExercises = exerciseService.getUserSessions(targetUser.id);
+                  const userWeights = weightService.getUserMeasurements(targetUser.id);
+
+                  // Extract all distinct historical dates logged by this user
+                  const historyDates = Array.from(new Set(allEntries.map((e) => e.diaryDate))).sort().reverse();
 
                   return (
                     <div className="space-y-6">
-                      <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
-                        <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800">
-                          <p className="text-[11px] text-slate-400">Calories</p>
-                          <p className="text-xl font-bold text-white mt-1">{totals.calories} kcal</p>
-                          <p className="text-[10px] text-slate-500">Target: 2,400 kcal</p>
-                        </div>
-                        <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800">
-                          <p className="text-[11px] text-slate-400">Protein</p>
-                          <p className="text-xl font-bold text-emerald-400 mt-1">{totals.protein}g</p>
-                          <p className="text-[10px] text-slate-500">Target: 150g (2.0g/kg)</p>
-                        </div>
-                        <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800">
-                          <p className="text-[11px] text-slate-400">Carbohydrates</p>
-                          <p className="text-xl font-bold text-amber-400 mt-1">{totals.carbs}g</p>
-                          <p className="text-[10px] text-slate-500">Target: 290g</p>
-                        </div>
-                        <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800">
-                          <p className="text-[11px] text-slate-400">Fat</p>
-                          <p className="text-xl font-bold text-purple-400 mt-1">{totals.fat}g</p>
-                          <p className="text-[10px] text-slate-500">Target: 70g</p>
-                        </div>
-                        <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800">
-                          <p className="text-[11px] text-slate-400">Fibre</p>
-                          <p className="text-xl font-bold text-blue-400 mt-1">{totals.fibre}g</p>
-                          <p className="text-[10px] text-slate-500">Target: 35g</p>
-                        </div>
-                        <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800">
-                          <p className="text-[11px] text-slate-400">Water</p>
-                          <p className="text-xl font-bold text-cyan-400 mt-1">
-                            {diaryService.getWaterForDate(todayStr)} ml
-                          </p>
-                          <p className="text-[10px] text-slate-500">Target: 3,000 ml</p>
-                        </div>
+                      {/* Section Navigation Pills */}
+                      <div className="flex flex-wrap items-center gap-2 pb-1 border-b border-slate-800">
+                        <button
+                          type="button"
+                          onClick={() => setInspectSection("all")}
+                          className={`px-3 py-1 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 ${
+                            inspectSection === "all"
+                              ? "bg-purple-600 text-white"
+                              : "bg-slate-900 text-slate-400 hover:text-white border border-slate-800"
+                          }`}
+                        >
+                          <Layers className="w-3.5 h-3.5" />
+                          <span>Complete 360° Overview</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setInspectSection("today")}
+                          className={`px-3 py-1 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 ${
+                            inspectSection === "today"
+                              ? "bg-emerald-600 text-white"
+                              : "bg-slate-900 text-slate-400 hover:text-white border border-slate-800"
+                          }`}
+                        >
+                          <Utensils className="w-3.5 h-3.5" />
+                          <span>Today&apos;s Diary ({todayEntries.length})</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setInspectSection("history")}
+                          className={`px-3 py-1 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 ${
+                            inspectSection === "history"
+                              ? "bg-blue-600 text-white"
+                              : "bg-slate-900 text-slate-400 hover:text-white border border-slate-800"
+                          }`}
+                        >
+                          <Calendar className="w-3.5 h-3.5" />
+                          <span>All-Days History ({historyDates.length} days)</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setInspectSection("water")}
+                          className={`px-3 py-1 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 ${
+                            inspectSection === "water"
+                              ? "bg-cyan-600 text-white"
+                              : "bg-slate-900 text-slate-400 hover:text-white border border-slate-800"
+                          }`}
+                        >
+                          <Droplets className="w-3.5 h-3.5" />
+                          <span>Hydration ({userWater.length})</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setInspectSection("exercise")}
+                          className={`px-3 py-1 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 ${
+                            inspectSection === "exercise"
+                              ? "bg-amber-600 text-white"
+                              : "bg-slate-900 text-slate-400 hover:text-white border border-slate-800"
+                          }`}
+                        >
+                          <Dumbbell className="w-3.5 h-3.5" />
+                          <span>Workouts ({userExercises.length})</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setInspectSection("weight")}
+                          className={`px-3 py-1 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 ${
+                            inspectSection === "weight"
+                              ? "bg-rose-600 text-white"
+                              : "bg-slate-900 text-slate-400 hover:text-white border border-slate-800"
+                          }`}
+                        >
+                          <Scale className="w-3.5 h-3.5" />
+                          <span>Weight ({userWeights.length})</span>
+                        </button>
                       </div>
 
-                      {/* Nutritional Exclusions & User Configured Rules Card */}
-                      <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 text-xs flex flex-wrap items-center justify-between gap-3">
-                        <div className="flex items-center gap-2">
-                          <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                          <span className="font-semibold text-white">Dietary Constraints:</span>
-                          <span className="text-slate-400">
-                            Excluded: {preferencesService.getPreferences().foodsAvoided.join(", ") || "None"} • Home food context
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-1.5 text-emerald-400 font-semibold">
-                          <Clock className="w-3.5 h-3.5" />
-                          <span>Dinner Cutoff: {formatTime12h(preferencesService.getPreferences().cutoffs.dinner)} (User Configured)</span>
-                        </div>
-                      </div>
-
-                      {/* Itemized Food Diary List */}
-                      <div className="rounded-2xl border border-slate-800 bg-slate-900 overflow-hidden">
-                        <div className="p-4 border-b border-slate-800 flex items-center justify-between">
-                          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                            Food Diary Records for Today ({entries.length} items logged)
-                          </h3>
-                        </div>
-                        {entries.length === 0 ? (
-                          <div className="p-8 text-center text-slate-500 text-xs">
-                            No food items logged today yet for @{targetUser?.username}.
-                          </div>
-                        ) : (
-                          <div className="divide-y divide-slate-800">
-                            {entries.map((item) => (
-                              <div key={item.id} className="p-4 flex items-center justify-between text-xs hover:bg-slate-800/40">
-                                <div>
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-bold text-white">{item.foodName}</span>
-                                    <span className="px-1.5 py-0.5 rounded text-[10px] uppercase font-semibold bg-slate-800 text-slate-400">
-                                      {item.mealCategory.replace("_", " ")}
-                                    </span>
-                                    <span className="px-1.5 py-0.5 rounded text-[10px] uppercase font-semibold bg-emerald-950 text-emerald-400 border border-emerald-800">
-                                      {item.confidenceLabel}
-                                    </span>
-                                  </div>
-                                  <p className="text-[11px] text-slate-400 mt-0.5">
-                                    {item.quantity} {item.unit} • {item.preparationMethod} ({item.isCooked ? "Cooked" : "Raw"}) • Consumed at {item.consumedAt.slice(11, 16)} IST
-                                  </p>
+                      {/* 1. User Profile & Constraints Header Card */}
+                      {(inspectSection === "all" || inspectSection === "today") && (
+                        <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-4">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
+                            <div className="flex items-center gap-3">
+                              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-600 to-indigo-600 text-white font-extrabold flex items-center justify-center text-lg shadow-lg">
+                                {targetUser.name.charAt(0).toUpperCase()}
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <h3 className="text-base font-bold text-white">{targetUser.name}</h3>
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-purple-950 text-purple-300 border border-purple-800">
+                                    {targetUser.role.replace("_", " ")}
+                                  </span>
                                 </div>
-                                <div className="text-right">
-                                  <p className="font-bold text-white">{item.calories} kcal</p>
-                                  <p className="text-[11px] text-slate-400">
-                                    {item.proteinG}g P • {item.carbsG}g C • {item.fatG}g F • {item.fibreG}g Fibre
-                                  </p>
+                                <p className="text-xs text-slate-400 mt-0.5">
+                                  @{targetUser.username} • {targetUser.email} • ID: <code className="text-slate-300">{targetUser.id}</code>
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 text-xs">
+                              <span className="px-2.5 py-1 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 font-semibold">
+                                Dinner Cutoff: {formatTime12h(userPrefs.cutoffs.dinner)}
+                              </span>
+                              <span className="px-2.5 py-1 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 font-semibold">
+                                Timezone: Asia/Kolkata
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Profile Attributes Grid */}
+                          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3 text-xs">
+                            <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800/80">
+                              <p className="text-slate-500 font-semibold uppercase text-[10px]">Age</p>
+                              <p className="font-bold text-white text-sm mt-0.5">{userProfile?.age ? `${userProfile.age} yrs` : "—"}</p>
+                            </div>
+                            <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800/80">
+                              <p className="text-slate-500 font-semibold uppercase text-[10px]">Height</p>
+                              <p className="font-bold text-white text-sm mt-0.5">{userProfile?.heightCm ? `${userProfile.heightCm} cm` : "—"}</p>
+                            </div>
+                            <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800/80">
+                              <p className="text-slate-500 font-semibold uppercase text-[10px]">Current Weight</p>
+                              <p className="font-bold text-emerald-400 text-sm mt-0.5">{userProfile?.currentWeightKg ? `${userProfile.currentWeightKg} kg` : "—"}</p>
+                            </div>
+                            <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800/80">
+                              <p className="text-slate-500 font-semibold uppercase text-[10px]">Target Weight</p>
+                              <p className="font-bold text-white text-sm mt-0.5">{userProfile?.targetWeightKg ? `${userProfile.targetWeightKg} kg` : "—"}</p>
+                            </div>
+                            <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800/80">
+                              <p className="text-slate-500 font-semibold uppercase text-[10px]">Goal</p>
+                              <p className="font-bold text-purple-400 text-xs mt-1 truncate">
+                                {userProfile?.fitnessGoal ? userProfile.fitnessGoal.replace("_", " ").toUpperCase() : "RECOMPOSITION"}
+                              </p>
+                            </div>
+                            <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800/80">
+                              <p className="text-slate-500 font-semibold uppercase text-[10px]">Context</p>
+                              <p className="font-bold text-amber-400 text-xs mt-1 truncate">
+                                {userProfile?.cookingAbility ? userProfile.cookingAbility.replace("_", " ") : "Home / PG"}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Time-Based Cutoffs & Dietary Exclusions Card */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                            <div className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800 text-xs space-y-2">
+                              <div className="flex items-center gap-1.5 font-bold text-purple-300">
+                                <Clock className="w-4 h-4 text-purple-400" />
+                                <span>Configured Meal Cutoff Times</span>
+                              </div>
+                              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[11px]">
+                                <div>
+                                  <span className="text-slate-500 block">Dinner:</span>
+                                  <span className="font-bold text-white">{formatTime12h(userPrefs.cutoffs.dinner)}</span>
+                                </div>
+                                <div>
+                                  <span className="text-slate-500 block">Breakfast:</span>
+                                  <span className="font-bold text-white">{formatTime12h(userPrefs.cutoffs.breakfast)}</span>
+                                </div>
+                                <div>
+                                  <span className="text-slate-500 block">Lunch:</span>
+                                  <span className="font-bold text-white">{formatTime12h(userPrefs.cutoffs.lunch)}</span>
+                                </div>
+                                <div>
+                                  <span className="text-slate-500 block">Evening Snack:</span>
+                                  <span className="font-bold text-white">{formatTime12h(userPrefs.cutoffs.evening_snack)}</span>
+                                </div>
+                                <div>
+                                  <span className="text-slate-500 block">Pre-Workout:</span>
+                                  <span className="font-bold text-white">{formatTime12h(userPrefs.cutoffs.pre_workout)}</span>
+                                </div>
+                                <div>
+                                  <span className="text-slate-500 block">Post-Workout:</span>
+                                  <span className="font-bold text-white">{formatTime12h(userPrefs.cutoffs.post_workout)}</span>
                                 </div>
                               </div>
-                            ))}
+                            </div>
+
+                            <div className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800 text-xs space-y-2">
+                              <div className="flex items-center gap-1.5 font-bold text-rose-300">
+                                <ShieldAlert className="w-4 h-4 text-rose-400" />
+                                <span>Excluded Foods &amp; Allergens</span>
+                              </div>
+                              <div className="flex flex-wrap gap-1.5 pt-1">
+                                {userPrefs.foodsAvoided && userPrefs.foodsAvoided.length > 0 ? (
+                                  userPrefs.foodsAvoided.map((item) => (
+                                    <span
+                                      key={item}
+                                      className="px-2.5 py-0.5 rounded-full bg-rose-950/80 border border-rose-800 text-rose-300 text-[11px] font-bold"
+                                    >
+                                      {item}
+                                    </span>
+                                  ))
+                                ) : (
+                                  <span className="text-slate-500 text-xs italic">No dietary items excluded</span>
+                                )}
+                              </div>
+                            </div>
                           </div>
-                        )}
-                      </div>
+                        </div>
+                      )}
+
+                      {/* 2. Today's Macros vs Targets */}
+                      {(inspectSection === "all" || inspectSection === "today") && (
+                        <div className="space-y-3">
+                          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                            <Activity className="w-4 h-4 text-emerald-400" />
+                            <span>Today&apos;s Nutrient Intake vs Target Goals ({todayStr})</span>
+                          </h3>
+                          <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+                            <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800">
+                              <p className="text-[11px] text-slate-400">Calories</p>
+                              <p className="text-xl font-bold text-white mt-1">{totals.calories} kcal</p>
+                              <p className="text-[10px] text-slate-500">Target: {userTargets.calories} kcal</p>
+                              <div className="w-full bg-slate-800 h-1.5 rounded-full mt-2 overflow-hidden">
+                                <div
+                                  className="bg-purple-500 h-full rounded-full"
+                                  style={{ width: `${Math.min(100, Math.round((totals.calories / (userTargets.calories || 2400)) * 100))}%` }}
+                                />
+                              </div>
+                            </div>
+                            <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800">
+                              <p className="text-[11px] text-slate-400">Protein</p>
+                              <p className="text-xl font-bold text-emerald-400 mt-1">{totals.protein}g</p>
+                              <p className="text-[10px] text-slate-500">Target: {userTargets.protein}g</p>
+                              <div className="w-full bg-slate-800 h-1.5 rounded-full mt-2 overflow-hidden">
+                                <div
+                                  className="bg-emerald-500 h-full rounded-full"
+                                  style={{ width: `${Math.min(100, Math.round((totals.protein / (userTargets.protein || 150)) * 100))}%` }}
+                                />
+                              </div>
+                            </div>
+                            <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800">
+                              <p className="text-[11px] text-slate-400">Carbohydrates</p>
+                              <p className="text-xl font-bold text-amber-400 mt-1">{totals.carbs}g</p>
+                              <p className="text-[10px] text-slate-500">Target: {userTargets.carbs}g</p>
+                              <div className="w-full bg-slate-800 h-1.5 rounded-full mt-2 overflow-hidden">
+                                <div
+                                  className="bg-amber-500 h-full rounded-full"
+                                  style={{ width: `${Math.min(100, Math.round((totals.carbs / (userTargets.carbs || 290)) * 100))}%` }}
+                                />
+                              </div>
+                            </div>
+                            <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800">
+                              <p className="text-[11px] text-slate-400">Fat</p>
+                              <p className="text-xl font-bold text-purple-400 mt-1">{totals.fat}g</p>
+                              <p className="text-[10px] text-slate-500">Target: {userTargets.fat}g</p>
+                              <div className="w-full bg-slate-800 h-1.5 rounded-full mt-2 overflow-hidden">
+                                <div
+                                  className="bg-purple-500 h-full rounded-full"
+                                  style={{ width: `${Math.min(100, Math.round((totals.fat / (userTargets.fat || 70)) * 100))}%` }}
+                                />
+                              </div>
+                            </div>
+                            <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800">
+                              <p className="text-[11px] text-slate-400">Fibre</p>
+                              <p className="text-xl font-bold text-blue-400 mt-1">{totals.fibre}g</p>
+                              <p className="text-[10px] text-slate-500">Target: {userTargets.fibre}g</p>
+                              <div className="w-full bg-slate-800 h-1.5 rounded-full mt-2 overflow-hidden">
+                                <div
+                                  className="bg-blue-500 h-full rounded-full"
+                                  style={{ width: `${Math.min(100, Math.round((totals.fibre / (userTargets.fibre || 35)) * 100))}%` }}
+                                />
+                              </div>
+                            </div>
+                            <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800">
+                              <p className="text-[11px] text-slate-400">Water</p>
+                              <p className="text-xl font-bold text-cyan-400 mt-1">{todayWater} ml</p>
+                              <p className="text-[10px] text-slate-500">Target: {userTargets.waterMl} ml</p>
+                              <div className="w-full bg-slate-800 h-1.5 rounded-full mt-2 overflow-hidden">
+                                <div
+                                  className="bg-cyan-500 h-full rounded-full"
+                                  style={{ width: `${Math.min(100, Math.round((todayWater / (userTargets.waterMl || 3000)) * 100))}%` }}
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 3. Today's Food Diary Records */}
+                      {(inspectSection === "all" || inspectSection === "today") && (
+                        <div className="rounded-2xl border border-slate-800 bg-slate-900 overflow-hidden">
+                          <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+                            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                              <Utensils className="w-4 h-4 text-purple-400" />
+                              <span>Today&apos;s Itemized Food Diary ({todayEntries.length} items logged)</span>
+                            </h3>
+                          </div>
+                          {todayEntries.length === 0 ? (
+                            <div className="p-8 text-center text-slate-500 text-xs">
+                              No food items logged today yet for @{targetUser?.username}.
+                            </div>
+                          ) : (
+                            <div className="divide-y divide-slate-800">
+                              {todayEntries.map((item) => (
+                                <div key={item.id} className="p-4 flex items-center justify-between text-xs hover:bg-slate-800/40">
+                                  <div>
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-bold text-white">{item.foodName}</span>
+                                      <span className="px-1.5 py-0.5 rounded text-[10px] uppercase font-semibold bg-slate-800 text-slate-400">
+                                        {item.mealCategory.replace("_", " ")}
+                                      </span>
+                                      <span className="px-1.5 py-0.5 rounded text-[10px] uppercase font-semibold bg-emerald-950 text-emerald-400 border border-emerald-800">
+                                        {item.confidenceLabel}
+                                      </span>
+                                    </div>
+                                    <p className="text-[11px] text-slate-400 mt-0.5">
+                                      {item.quantity} {item.unit} • {item.preparationMethod} ({item.isCooked ? "Cooked" : "Raw"}) • Consumed at {item.consumedAt.slice(11, 16)} IST
+                                    </p>
+                                  </div>
+                                  <div className="text-right">
+                                    <p className="font-bold text-white">{item.calories} kcal</p>
+                                    <p className="text-[11px] text-slate-400">
+                                      {item.proteinG}g P • {item.carbsG}g C • {item.fatG}g F • {item.fibreG}g Fibre
+                                    </p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* 4. Complete All-Days Food Intake History */}
+                      {(inspectSection === "all" || inspectSection === "history") && (
+                        <div className="rounded-2xl border border-slate-800 bg-slate-900 overflow-hidden">
+                          <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+                            <div>
+                              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                                <Calendar className="w-4 h-4 text-blue-400" />
+                                <span>Complete Historical Food Intake ({historyDates.length} Days Tracked, {allEntries.length} Items Total)</span>
+                              </h3>
+                              <p className="text-[11px] text-slate-500 mt-0.5">
+                                Click on any past date to expand and inspect exact items logged.
+                              </p>
+                            </div>
+                          </div>
+                          {historyDates.length === 0 ? (
+                            <div className="p-8 text-center text-slate-500 text-xs">
+                              No historical food logs found for @{targetUser?.username}.
+                            </div>
+                          ) : (
+                            <div className="divide-y divide-slate-800">
+                              {historyDates.map((dateStr) => {
+                                const dayEntries = allEntries.filter((e) => e.diaryDate === dateStr);
+                                const dayTotals = diaryService.getUserDailyTotals(targetUser.id, dateStr);
+                                const isExpanded = historyExpandedDate === dateStr;
+                                const dinnerItems = dayEntries.filter((e) => e.mealCategory === "dinner");
+                                const dinnerCutoff = userPrefs.cutoffs?.dinner || "19:00";
+                                const isDinnerCompliant = dinnerItems.length === 0 || dinnerItems.every((e) => {
+                                  try {
+                                    return e.consumedAt.slice(11, 16) <= dinnerCutoff;
+                                  } catch {
+                                    return true;
+                                  }
+                                });
+
+                                return (
+                                  <div key={dateStr} className="p-4 hover:bg-slate-800/30 transition-colors">
+                                    <div
+                                      onClick={() => setHistoryExpandedDate(isExpanded ? null : dateStr)}
+                                      className="flex items-center justify-between cursor-pointer"
+                                    >
+                                      <div className="flex items-center gap-3">
+                                        <div className="w-7 h-7 rounded-lg bg-slate-800 flex items-center justify-center text-slate-400">
+                                          {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                                        </div>
+                                        <div>
+                                          <div className="flex items-center gap-2">
+                                            <span className="font-bold text-white text-xs">{dateStr}</span>
+                                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-300">
+                                              {dayEntries.length} items
+                                            </span>
+                                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                              isDinnerCompliant
+                                                ? "bg-emerald-950 text-emerald-400 border border-emerald-800"
+                                                : "bg-amber-950 text-amber-400 border border-amber-800"
+                                            }`}>
+                                              {isDinnerCompliant ? "Cutoff Met" : "Late Dinner"}
+                                            </span>
+                                          </div>
+                                          <p className="text-[11px] text-slate-400 mt-0.5">
+                                            {dayTotals.protein}g Protein • {dayTotals.carbs}g Carbs • {dayTotals.fat}g Fat • {dayTotals.fibre}g Fibre
+                                          </p>
+                                        </div>
+                                      </div>
+                                      <div className="text-right">
+                                        <p className="font-bold text-white text-sm">{dayTotals.calories} kcal</p>
+                                        <p className="text-[10px] text-purple-400">
+                                          {isExpanded ? "Collapse" : "Expand Items"}
+                                        </p>
+                                      </div>
+                                    </div>
+
+                                    {/* Expanded day items */}
+                                    {isExpanded && (
+                                      <div className="mt-3 pl-10 pr-2 pt-3 border-t border-slate-800/60 divide-y divide-slate-800/40 text-xs">
+                                        {dayEntries.map((item) => (
+                                          <div key={item.id} className="py-2 flex items-center justify-between">
+                                            <div>
+                                              <span className="font-semibold text-slate-200">{item.foodName}</span>
+                                              <span className="text-slate-400 text-[11px] ml-2">
+                                                ({item.quantity} {item.unit} • {item.mealCategory} • {item.consumedAt.slice(11, 16)} IST)
+                                              </span>
+                                            </div>
+                                            <span className="text-slate-300 font-medium">
+                                              {item.calories} kcal • {item.proteinG}g P
+                                            </span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* 5. Hydration & Water Intake History */}
+                      {(inspectSection === "all" || inspectSection === "water") && (
+                        <div className="rounded-2xl border border-slate-800 bg-slate-900 overflow-hidden">
+                          <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+                            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                              <Droplets className="w-4 h-4 text-cyan-400" />
+                              <span>Water Intake &amp; Hydration Logs ({userWater.length} logs recorded)</span>
+                            </h3>
+                          </div>
+                          {userWater.length === 0 ? (
+                            <div className="p-8 text-center text-slate-500 text-xs">
+                              No water logs recorded yet for @{targetUser?.username}.
+                            </div>
+                          ) : (
+                            <div className="divide-y divide-slate-800">
+                              {userWater.slice(0, 10).map((log) => (
+                                <div key={log.id} className="p-3.5 flex items-center justify-between text-xs hover:bg-slate-800/30">
+                                  <div className="flex items-center gap-2">
+                                    <Droplets className="w-3.5 h-3.5 text-cyan-400" />
+                                    <span className="font-bold text-white">{log.amountMl} ml</span>
+                                    <span className="text-slate-400 text-[11px]">on {log.dateStr}</span>
+                                  </div>
+                                  <span className="text-slate-400 text-[11px]">
+                                    Logged at {log.loggedAt ? log.loggedAt.slice(11, 16) : "—"} IST
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* 6. Workouts & Exercise History */}
+                      {(inspectSection === "all" || inspectSection === "exercise") && (
+                        <div className="rounded-2xl border border-slate-800 bg-slate-900 overflow-hidden">
+                          <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+                            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                              <Dumbbell className="w-4 h-4 text-amber-400" />
+                              <span>Workout &amp; Exercise Sessions ({userExercises.length} sessions logged)</span>
+                            </h3>
+                          </div>
+                          {userExercises.length === 0 ? (
+                            <div className="p-8 text-center text-slate-500 text-xs">
+                              No exercise sessions recorded yet for @{targetUser?.username}.
+                            </div>
+                          ) : (
+                            <div className="divide-y divide-slate-800">
+                              {userExercises.map((ex) => (
+                                <div key={ex.id} className="p-3.5 flex items-center justify-between text-xs hover:bg-slate-800/30">
+                                  <div>
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-bold text-white">{ex.exerciseName}</span>
+                                      <span className="px-1.5 py-0.5 rounded text-[10px] uppercase font-bold bg-amber-950 text-amber-300 border border-amber-800">
+                                        {ex.activityType.replace("_", " ")}
+                                      </span>
+                                    </div>
+                                    <p className="text-[11px] text-slate-400 mt-0.5">
+                                      {ex.durationMinutes} mins • {ex.steps ? `${ex.steps} steps • ` : ""}{ex.sessionDate} • {ex.notes || "No notes"}
+                                    </p>
+                                  </div>
+                                  <div className="text-right">
+                                    <span className="font-bold text-amber-400 text-sm">~{ex.estimatedCaloriesBurned} kcal</span>
+                                    <p className="text-[10px] text-slate-500">Burned</p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* 7. Weight & Body Measurement Check-ins */}
+                      {(inspectSection === "all" || inspectSection === "weight") && (
+                        <div className="rounded-2xl border border-slate-800 bg-slate-900 overflow-hidden">
+                          <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+                            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                              <Scale className="w-4 h-4 text-rose-400" />
+                              <span>Body Weight &amp; Anthropometric Check-ins ({userWeights.length} measurements)</span>
+                            </h3>
+                          </div>
+                          {userWeights.length === 0 ? (
+                            <div className="p-8 text-center text-slate-500 text-xs">
+                              No weight check-ins recorded yet for @{targetUser?.username}.
+                            </div>
+                          ) : (
+                            <div className="divide-y divide-slate-800">
+                              {userWeights.map((w) => (
+                                <div key={w.id} className="p-3.5 flex items-center justify-between text-xs hover:bg-slate-800/30">
+                                  <div>
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-bold text-white text-sm">{w.weightKg} kg</span>
+                                      {w.waistCm && (
+                                        <span className="text-slate-400 text-[11px]">Waist: {w.waistCm} cm</span>
+                                      )}
+                                      {w.bodyFatPct && (
+                                        <span className="text-slate-400 text-[11px]">BF: {w.bodyFatPct}%</span>
+                                      )}
+                                    </div>
+                                    <p className="text-[11px] text-slate-400 mt-0.5">
+                                      Date: {w.measuredDate} • {w.notes || "Standard weigh-in"}
+                                    </p>
+                                  </div>
+                                  <span className="text-slate-400 text-[11px]">
+                                    Recorded at {w.loggedAt ? w.loggedAt.slice(11, 16) : "—"} IST
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   );
                 })()}
@@ -1029,23 +1583,58 @@ export default function AdminPortalPage() {
             )}
 
             {/* -------------------------------------------------------------- */}
-            {/* TAB 3: PER-USER DATE REPORT GENERATOR                          */}
+            {/* TAB 3: PER-USER DATE & ALL-DAYS REPORT GENERATOR               */}
             {/* -------------------------------------------------------------- */}
             {activeTab === "report" && (
               <div className="space-y-6">
-                <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div>
-                    <h2 className="text-base font-bold text-white flex items-center gap-2">
-                      <Printer className="w-5 h-5 text-blue-400" />
-                      <span>Individual Date Nutrition Report Generator</span>
-                    </h2>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      Generate an official, structured compliance and nutrition report for any specific person on any day.
-                    </p>
+                <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                      <h2 className="text-base font-bold text-white flex items-center gap-2">
+                        <Printer className="w-5 h-5 text-blue-400" />
+                        <span>Nutrition &amp; Compliance Audit Report Generator</span>
+                      </h2>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        Compile official audit reports: either for an individual single date or a multi-day cumulative history across all dates.
+                      </p>
+                    </div>
+
+                    {/* Mode Toggle: Single Day vs All Days Combined */}
+                    <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-950 border border-slate-800">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setReportType("single_day");
+                          setAllDaysReport(null);
+                        }}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                          reportType === "single_day"
+                            ? "bg-blue-600 text-white shadow"
+                            : "text-slate-400 hover:text-white"
+                        }`}
+                      >
+                        Single Date Report
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setReportType("all_days");
+                          setGeneratedReport(null);
+                        }}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                          reportType === "all_days"
+                            ? "bg-blue-600 text-white shadow"
+                            : "text-slate-400 hover:text-white"
+                        }`}
+                      >
+                        All-Days Cumulative Report
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-slate-800/80">
                     <div>
+                      <label className="block text-[10px] font-semibold text-slate-400 uppercase mb-1">Target User</label>
                       <select
                         value={reportUserId}
                         onChange={(e) => setReportUserId(e.target.value)}
@@ -1059,28 +1648,35 @@ export default function AdminPortalPage() {
                       </select>
                     </div>
 
-                    <div>
-                      <input
-                        type="date"
-                        value={reportDate}
-                        onChange={(e) => setReportDate(e.target.value)}
-                        className="px-3 py-1.5 rounded-xl border border-slate-800 bg-slate-950 text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
+                    {reportType === "single_day" && (
+                      <div>
+                        <label className="block text-[10px] font-semibold text-slate-400 uppercase mb-1">Audit Date</label>
+                        <input
+                          type="date"
+                          value={reportDate}
+                          onChange={(e) => setReportDate(e.target.value)}
+                          className="px-3 py-1.5 rounded-xl border border-slate-800 bg-slate-950 text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                    )}
 
-                    <Button
-                      size="sm"
-                      onClick={handleGenerateReport}
-                      className="text-xs rounded-xl bg-blue-600 hover:bg-blue-700 text-white gap-1.5"
-                    >
-                      <Sparkles className="w-3.5 h-3.5" />
-                      <span>Generate Report</span>
-                    </Button>
+                    <div className="flex items-end pt-4">
+                      <Button
+                        size="sm"
+                        onClick={handleGenerateReport}
+                        className="text-xs rounded-xl bg-blue-600 hover:bg-blue-700 text-white gap-1.5 py-2 px-4 shadow"
+                      >
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>
+                          {reportType === "single_day" ? "Generate Single Day Report" : "Compile All-Days Report"}
+                        </span>
+                      </Button>
+                    </div>
                   </div>
                 </div>
 
-                {/* Generated Printable Report Card */}
-                {generatedReport ? (
+                {/* 1. Single Date Printable Report Card */}
+                {reportType === "single_day" && generatedReport && (
                   <div className="p-6 md:p-8 rounded-2xl bg-slate-900 border border-slate-800 text-slate-100 shadow-2xl space-y-6 print:bg-white print:text-black">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800 pb-5 gap-4">
                       <div>
@@ -1115,18 +1711,18 @@ export default function AdminPortalPage() {
                         <p className="font-bold text-white text-sm mt-0.5">{generatedReport.date} (IST)</p>
                       </div>
                       <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800">
-                        <p className="text-slate-400">Physical Protocol</p>
-                        <p className="font-bold text-emerald-400 text-sm mt-0.5">Mifflin-St Jeor (75 kg)</p>
+                        <p className="text-slate-400">Nutrition Protocol</p>
+                        <p className="font-bold text-emerald-400 text-sm mt-0.5">Custom Physical Blueprint</p>
                       </div>
                       <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800">
-                        <p className="text-slate-400">Dinner 7:00 PM Cutoff</p>
+                        <p className="text-slate-400">Dinner Cutoff Compliance</p>
                         <p className="font-bold text-emerald-400 text-sm mt-0.5">
                           {generatedReport.compliance.followedDinnerCutoff ? "100% Compliant" : "Late Dinner"}
                         </p>
                       </div>
                       <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800">
-                        <p className="text-slate-400">Whey &amp; Squid Policy</p>
-                        <p className="font-bold text-purple-400 text-sm mt-0.5">Strictly Excluded</p>
+                        <p className="text-slate-400">Dietary Policy</p>
+                        <p className="font-bold text-purple-400 text-sm mt-0.5">Exclusions Enforced</p>
                       </div>
                     </div>
 
@@ -1241,9 +1837,132 @@ export default function AdminPortalPage() {
                       <span>Verified Administrator Signature: [Approved]</span>
                     </div>
                   </div>
-                ) : (
+                )}
+
+                {/* 2. All-Days Multi-Day Cumulative Report Card */}
+                {reportType === "all_days" && allDaysReport && (
+                  <div className="p-6 md:p-8 rounded-2xl bg-slate-900 border border-slate-800 text-slate-100 shadow-2xl space-y-6 print:bg-white print:text-black">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800 pb-5 gap-4">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="w-3 h-3 rounded-full bg-blue-500" />
+                          <h3 className="text-xl font-extrabold text-white">
+                            All-Days Cumulative User Nutrition &amp; Intake Audit
+                          </h3>
+                        </div>
+                        <p className="text-xs text-slate-400 mt-1">
+                          Subject: <strong className="text-white">{allDaysReport.user.name}</strong> (@{allDaysReport.user.username}) • Email: {allDaysReport.user.email} • ID: {allDaysReport.user.id}
+                        </p>
+                      </div>
+
+                      <div className="text-right flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => window.print()}
+                          className="text-xs rounded-xl border-slate-700 gap-1.5 text-slate-200"
+                        >
+                          <Printer className="w-3.5 h-3.5" />
+                          <span>Print / Save PDF</span>
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Cumulative Master Metric Cards */}
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3 text-xs">
+                      <div className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800">
+                        <p className="text-slate-400">Total Days Tracked</p>
+                        <p className="font-extrabold text-white text-xl mt-1">{allDaysReport.totalDays} Days</p>
+                      </div>
+                      <div className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800">
+                        <p className="text-slate-400">Total Lifetime Calories</p>
+                        <p className="font-extrabold text-purple-400 text-xl mt-1">{allDaysReport.totalCalories.toLocaleString()} kcal</p>
+                      </div>
+                      <div className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800">
+                        <p className="text-slate-400">Avg Daily Calories</p>
+                        <p className="font-extrabold text-white text-xl mt-1">{allDaysReport.avgCalories} kcal</p>
+                      </div>
+                      <div className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800">
+                        <p className="text-slate-400">Avg Daily Protein</p>
+                        <p className="font-extrabold text-emerald-400 text-xl mt-1">{allDaysReport.avgProtein}g</p>
+                      </div>
+                      <div className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800">
+                        <p className="text-slate-400">Avg Daily Hydration</p>
+                        <p className="font-extrabold text-cyan-400 text-xl mt-1">{allDaysReport.avgWater} ml</p>
+                      </div>
+                      <div className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800">
+                        <p className="text-slate-400">Dinner Cutoff Compliance</p>
+                        <p className="font-extrabold text-emerald-400 text-xl mt-1">{allDaysReport.dinnerCompliancePct}%</p>
+                      </div>
+                    </div>
+
+                    {/* Day-by-Day Matrix Breakdown Table */}
+                    <div>
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
+                        Day-by-Day Historical Intake Matrix ({allDaysReport.days.length} Days)
+                      </h4>
+                      <div className="overflow-x-auto rounded-xl border border-slate-800">
+                        <table className="w-full text-xs text-left">
+                          <thead>
+                            <tr className="bg-slate-950/80 border-b border-slate-800 text-slate-400 uppercase font-semibold">
+                              <th className="py-2.5 px-4">Date</th>
+                              <th className="py-2.5 px-4">Items</th>
+                              <th className="py-2.5 px-4">Calories</th>
+                              <th className="py-2.5 px-4">Protein</th>
+                              <th className="py-2.5 px-4">Carbs</th>
+                              <th className="py-2.5 px-4">Fat</th>
+                              <th className="py-2.5 px-4">Water</th>
+                              <th className="py-2.5 px-4">Dinner Time</th>
+                              <th className="py-2.5 px-4 text-right">Cutoff Status</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-800">
+                            {allDaysReport.days.length === 0 ? (
+                              <tr>
+                                <td colSpan={9} className="py-6 text-center text-slate-500">
+                                  No historical intake entries found for this user.
+                                </td>
+                              </tr>
+                            ) : (
+                              allDaysReport.days.map((d) => (
+                                <tr key={d.date} className="hover:bg-slate-800/40">
+                                  <td className="py-2.5 px-4 font-bold text-white">{d.date}</td>
+                                  <td className="py-2.5 px-4 text-slate-400">{d.itemsCount} items</td>
+                                  <td className="py-2.5 px-4 font-semibold text-white">{d.totals.calories} kcal</td>
+                                  <td className="py-2.5 px-4 font-semibold text-emerald-400">{d.totals.protein}g</td>
+                                  <td className="py-2.5 px-4 text-amber-400">{d.totals.carbs}g</td>
+                                  <td className="py-2.5 px-4 text-purple-400">{d.totals.fat}g</td>
+                                  <td className="py-2.5 px-4 text-cyan-400">{d.waterMl > 0 ? `${d.waterMl} ml` : "—"}</td>
+                                  <td className="py-2.5 px-4 text-slate-300">{d.dinnerTime || "No Dinner"}</td>
+                                  <td className="py-2.5 px-4 text-right">
+                                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                      d.dinnerFollowedCutoff
+                                        ? "bg-emerald-950 text-emerald-400 border border-emerald-800"
+                                        : "bg-amber-950 text-amber-400 border border-amber-800"
+                                    }`}>
+                                      {d.dinnerFollowedCutoff ? "Compliant" : "Cutoff Missed"}
+                                    </span>
+                                  </td>
+                                </tr>
+                              ))
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    {/* Official Sign-Off Footer */}
+                    <div className="pt-4 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-500">
+                      <span>Generated by Sarveswar Health Platform Multi-Day Audit Engine</span>
+                      <span>Verified Administrator Signature: [Approved]</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Empty State when no report has been generated */}
+                {!generatedReport && !allDaysReport && (
                   <div className="p-12 text-center text-slate-500 text-xs bg-slate-900 border border-slate-800 rounded-2xl">
-                    Select a user and date above and click &quot;Generate Report&quot; to compile the full nutrition audit.
+                    Select a user above and choose between &quot;Single Date Report&quot; or &quot;All-Days Cumulative Report&quot; to compile the complete audit.
                   </div>
                 )}
               </div>

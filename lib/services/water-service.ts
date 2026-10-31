@@ -117,6 +117,25 @@ class WaterService {
       percentComplete: percent,
     };
   }
+
+  public getUserLogs(userId: string): WaterLogRecord[] {
+    if (typeof window === "undefined") return [];
+    try {
+      const key = this.getStorageKey(userId);
+      const stored = window.localStorage.getItem(key);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch {}
+    return [];
+  }
+
+  public getUserWaterForDate(userId: string, dateStr: string): number {
+    return this.getUserLogs(userId)
+      .filter((l) => l.dateStr === dateStr)
+      .reduce((acc, l) => acc + l.amountMl, 0);
+  }
 }
 
 export const waterService = new WaterService();

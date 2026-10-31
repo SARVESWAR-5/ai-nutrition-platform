@@ -207,6 +207,23 @@ class ExerciseService {
       totalSteps,
     };
   }
+
+  public getUserSessions(userId: string): ExerciseSession[] {
+    if (typeof window === "undefined") return [];
+    try {
+      const key = this.getStorageKey(userId);
+      const stored = window.localStorage.getItem(key);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch {}
+    return [];
+  }
+
+  public getUserSessionsForDate(userId: string, dateStr: string): ExerciseSession[] {
+    return this.getUserSessions(userId).filter((s) => s.sessionDate === dateStr);
+  }
 }
 
 export const exerciseService = new ExerciseService();

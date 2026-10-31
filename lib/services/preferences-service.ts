@@ -292,6 +292,42 @@ class PreferencesService {
     return this.preferences;
   }
 
+  public getUserPreferences(userId?: string): UserPreferences {
+    if (!userId || typeof window === "undefined") return this.getPreferences();
+    try {
+      const { prefsKey, profileKey } = this.getStorageKeys(userId);
+      const isSarveswar =
+        userId === "usr-sarveswar-primary" ||
+        userId === "sarveswar" ||
+        userId === "sarveswar5" ||
+        userId === "usr-sarveswar5-primary";
+
+      const stored = localStorage.getItem(prefsKey);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        return {
+          cutoffs: { ...DEFAULT_MEAL_CUTOFFS, ...(parsed.cutoffs || {}) },
+          foodsAvoided: Array.isArray(parsed.foodsAvoided) ? parsed.foodsAvoided : isSarveswar ? DEFAULT_USER_PREFERENCES.foodsAvoided : [],
+          dietaryNotes: parsed.dietaryNotes || (isSarveswar ? DEFAULT_USER_PREFERENCES.dietaryNotes : ""),
+        };
+      }
+
+      const profileStr = localStorage.getItem(profileKey);
+      if (profileStr) {
+        const profile = JSON.parse(profileStr);
+        return {
+          cutoffs: {
+            ...DEFAULT_MEAL_CUTOFFS,
+            dinner: profile.preferredDinnerCutoff || DEFAULT_MEAL_CUTOFFS.dinner,
+          },
+          foodsAvoided: Array.isArray(profile.foodsAvoided) ? profile.foodsAvoided : isSarveswar ? DEFAULT_USER_PREFERENCES.foodsAvoided : [],
+          dietaryNotes: profile.cookingAbility || (isSarveswar ? DEFAULT_USER_PREFERENCES.dietaryNotes : "Custom schedule"),
+        };
+      }
+    } catch {}
+    return DEFAULT_USER_PREFERENCES;
+  }
+
   public savePreferences(updates: Partial<UserPreferences>): UserPreferences {
     this.loadFromStorage();
 

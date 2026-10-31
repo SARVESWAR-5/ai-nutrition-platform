@@ -229,6 +229,18 @@ class GoalService {
     return active;
   }
 
+  public getUserTargets(userId?: string): UserNutritionGoals {
+    if (!userId || typeof window === "undefined") return DEFAULT_NUTRITION_TARGETS;
+    try {
+      const { targetsKey } = this.getStorageKeys(userId);
+      const stored = localStorage.getItem(targetsKey);
+      if (stored) {
+        return { ...DEFAULT_NUTRITION_TARGETS, ...JSON.parse(stored) };
+      }
+    } catch {}
+    return DEFAULT_NUTRITION_TARGETS;
+  }
+
   /**
    * Records a new goal revision with an effective date (Feature 09).
    */

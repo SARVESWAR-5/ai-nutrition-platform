@@ -155,11 +155,11 @@ export default function AdminPortalPage() {
   const isAdmin = authService.isAdmin();
 
   // Handle Admin Login
-  const handleAdminLogin = (e: React.FormEvent) => {
+  const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError("");
 
-    const res = authService.login(loginIdentifier, loginPassword);
+    const res = await authService.loginAsync(loginIdentifier, loginPassword);
     if (!res.success) {
       setLoginError(res.error || "Login failed");
       return;
@@ -175,13 +175,15 @@ export default function AdminPortalPage() {
   };
 
   // Quick preset helper
-  const handlePresetLogin = (u: string, p: string) => {
+  const handlePresetLogin = async (u: string, p: string) => {
     setLoginIdentifier(u);
     setLoginPassword(p);
-    const res = authService.login(u, p);
+    const res = await authService.loginAsync(u, p);
     if (res.success && authService.isAdmin()) {
       refreshData();
       showToast(`Signed in as ${u}`);
+    } else if (res.success && !authService.isAdmin()) {
+      setLoginError(`${u} is a standard user account. Please sign in with an Administrator account.`);
     }
   };
 

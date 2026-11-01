@@ -96,6 +96,11 @@ class WeightService {
     return [...this.measurements].sort((a, b) => b.measuredDate.localeCompare(a.measuredDate));
   }
 
+  public getLatestMeasurement(): WeightMeasurement | undefined {
+    const all = this.getAllMeasurements();
+    return all.length > 0 ? all[0] : undefined;
+  }
+
   public logMeasurement(m: Omit<WeightMeasurement, "id" | "loggedAt">): WeightMeasurement {
     this.loadFromStorage();
     const newRecord: WeightMeasurement = {

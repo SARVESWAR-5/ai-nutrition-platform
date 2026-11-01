@@ -113,6 +113,14 @@ class ProgressAnalysisService {
       `Ensure dinner is consistently completed prior to your preferred 7:00 PM cutoff.`,
     ];
 
+    if (summary.averageCalories > 2400) {
+      const surplus = summary.averageCalories - 2400;
+      const fatGrams = Math.round((surplus / 7.7) * 10) / 10;
+      areasForImprovement.push(
+        `Caloric intake exceeded target budget by +${surplus} kcal/day (~${fatGrams}g potential adipose fat gain). All surplus macronutrients eaten beyond metabolic burn convert to body fat.`
+      );
+    }
+
     const supportedTrends = [
       `Body weight has remained stable around 75.0 kg with steady gym strength progress.`,
       `Protein intake is well-distributed between breakfast and dinner.`,
@@ -122,6 +130,15 @@ class ProgressAnalysisService {
       `Continue your 150g protein target using practical whole foods (chicken, eggs, paneer, milk and nuts).`,
       `Incorporate a 150g serving of mixed vegetables with dinner to boost fibre toward 35g.`,
     ];
+
+    if (summary.averageCalories > 2400) {
+      const surplus = summary.averageCalories - 2400;
+      const walkMins = Math.ceil(surplus / 4.6);
+      const walkSteps = Math.round(surplus * 22);
+      nextPeriodRecommendations.push(
+        `Compensatory Workout Offset: Add ${walkMins} mins brisk walking (~${walkSteps.toLocaleString()} steps) or ${Math.ceil(surplus / 7.2)} mins gym training to burn the +${surplus} kcal surplus.`
+      );
+    }
 
     const uncertaintyNotes = [
       `Missing logs are not assumed to be zero; ${summary.incompleteDaysCount} unrecorded or partially recorded days exist in this period.`,

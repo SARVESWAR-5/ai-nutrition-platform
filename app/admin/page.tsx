@@ -19,6 +19,7 @@ import { weightService } from "@/lib/services/weight-service";
 import { goalService } from "@/lib/services/goal-service";
 import { getUserProfileData } from "@/lib/services/profile-service";
 import { getLocalTodayDateString } from "@/lib/date/date-service";
+import { nutritionGoalEngine, NutrientExcessAudit } from "@/lib/services/nutrition-goal-engine";
 import {
   Shield,
   ShieldAlert,
@@ -38,6 +39,7 @@ import {
   Download,
   RefreshCw,
   AlertCircle,
+  AlertTriangle,
   Eye,
   CheckCircle2,
   Clock,
@@ -59,6 +61,7 @@ import {
   Target,
   FileText,
   Layers,
+  Footprints,
 } from "lucide-react";
 
 export default function AdminPortalPage() {
@@ -100,6 +103,7 @@ export default function AdminPortalPage() {
     totals: { calories: number; protein: number; carbs: number; fat: number; fibre: number };
     targets: { calories: number; protein: number; carbs: number; fat: number; fibre: number; waterMl: number };
     compliance: { metCalories: boolean; metProtein: boolean; followedDinnerCutoff: boolean };
+    excessAudit: NutrientExcessAudit;
   } | null>(null);
 
   const [allDaysReport, setAllDaysReport] = React.useState<{
@@ -110,6 +114,9 @@ export default function AdminPortalPage() {
     avgProtein: number;
     avgWater: number;
     dinnerCompliancePct: number;
+    flaggedDaysCount: number;
+    totalSurplusCalories: number;
+    totalCompensatoryWalkMinutes: number;
     days: Array<{
       date: string;
       totals: { calories: number; protein: number; carbs: number; fat: number; fibre: number };
@@ -118,6 +125,7 @@ export default function AdminPortalPage() {
       dinnerFollowedCutoff: boolean;
       itemsCount: number;
       items: FoodLogItem[];
+      excessAudit: NutrientExcessAudit;
     }>;
   } | null>(null);
 
@@ -364,6 +372,7 @@ export default function AdminPortalPage() {
         fat: userTargets.fat || 70,
         fibre: userTargets.fibre || 35,
         waterMl: userTargets.waterMl || 3000,
+        effectiveFrom: new Date().toISOString(),
       };
 
       const metCalories = totals.calories >= targets.calories * 0.9 && totals.calories <= targets.calories * 1.1;
@@ -379,6 +388,10 @@ export default function AdminPortalPage() {
         }
       });
 
+      const measurements = weightService.getUserMeasurements(targetUser.id);
+      const userWeight = measurements[0]?.weightKg || 75;
+      const excessAudit = nutritionGoalEngine.calculateExcessAndCompensatoryWorkouts(totals, targets, userWeight);
+
       setGeneratedReport({
         user: targetUser,
         date: reportDate,
@@ -390,24 +403,48 @@ export default function AdminPortalPage() {
           metProtein,
           followedDinnerCutoff,
         },
+        excessAudit,
       });
       setAllDaysReport(null);
     } else {
       // All days multi-day cumulative report
       const allEntries = diaryService.getEntriesForUser(targetUser.id);
       const uniqueDates = Array.from(new Set(allEntries.map((e) => e.diaryDate))).sort().reverse();
+      const userTargets = goalService.getUserTargets(targetUser.id);
+      const targets = {
+        calories: userTargets.calories || 2400,
+        protein: userTargets.protein || 150,
+        carbs: userTargets.carbs || 290,
+        fat: userTargets.fat || 70,
+        fibre: userTargets.fibre || 35,
+        waterMl: userTargets.waterMl || 3000,
+        effectiveFrom: new Date().toISOString(),
+      };
+
+      const measurements = weightService.getUserMeasurements(targetUser.id);
+      const userWeight = measurements[0]?.weightKg || 75;
 
       let totalCal = 0;
       let totalProt = 0;
       let totalWat = 0;
       let dinnerDaysCount = 0;
       let compliantDinnerDaysCount = 0;
+      let flaggedDaysCount = 0;
+      let totalSurplusCalories = 0;
+      let totalCompensatoryWalkMinutes = 0;
 
       const daysData = uniqueDates.map((d) => {
         const dayEntries = allEntries.filter((e) => e.diaryDate === d);
         const dayTotals = diaryService.getUserDailyTotals(targetUser.id, d);
         const dayWater = waterService.getUserWaterForDate(targetUser.id, d);
         const dinnerItems = dayEntries.filter((e) => e.mealCategory === "dinner");
+
+        const dayAudit = nutritionGoalEngine.calculateExcessAndCompensatoryWorkouts(dayTotals, targets, userWeight);
+        if (dayAudit.isDayExceeded) {
+          flaggedDaysCount++;
+          totalSurplusCalories += dayAudit.excessCalories;
+          totalCompensatoryWalkMinutes += dayAudit.workoutOffset.walkingMinutes;
+        }
 
         let dinnerTime: string | null = null;
         let followed = true;
@@ -437,6 +474,7 @@ export default function AdminPortalPage() {
           dinnerFollowedCutoff: followed,
           itemsCount: dayEntries.length,
           items: dayEntries,
+          excessAudit: dayAudit,
         };
       });
 
@@ -451,6 +489,9 @@ export default function AdminPortalPage() {
         avgProtein: Math.round((totalProt / count) * 10) / 10,
         avgWater: Math.round(totalWat / count),
         dinnerCompliancePct: dinnerCompliance,
+        flaggedDaysCount,
+        totalSurplusCalories,
+        totalCompensatoryWalkMinutes,
         days: daysData,
       });
       setGeneratedReport(null);
@@ -1721,10 +1762,96 @@ export default function AdminPortalPage() {
                         </p>
                       </div>
                       <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800">
-                        <p className="text-slate-400">Dietary Policy</p>
-                        <p className="font-bold text-purple-400 text-sm mt-0.5">Exclusions Enforced</p>
+                        <p className="text-slate-400">Day Target Status</p>
+                        <p className={`font-bold text-sm mt-0.5 ${generatedReport.excessAudit.isDayExceeded ? "text-red-400" : "text-emerald-400"}`}>
+                          {generatedReport.excessAudit.isDayExceeded ? "⚠️ Limit Exceeded (Flagged)" : "✅ Target Budget Maintained"}
+                        </p>
                       </div>
                     </div>
+
+                    {/* Feature: Excess Nutrients Flag, Body Fat Gain & Compensatory Workout Offset */}
+                    {generatedReport.excessAudit.isDayExceeded ? (
+                      <div className="p-4 rounded-xl bg-amber-950/50 border-2 border-amber-500 text-amber-200 space-y-3">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-amber-800/80 pb-2">
+                          <div className="flex items-center gap-2">
+                            <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
+                            <span className="font-black text-sm text-amber-300 uppercase tracking-wide">
+                              ⚠️ Daily Nutrient Limit Exceeded • Day Flagged
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="px-2.5 py-0.5 rounded bg-red-600 text-white text-[10px] font-black uppercase">
+                              Day Flagged
+                            </span>
+                            <span className="text-xs font-bold text-amber-300">
+                              +{generatedReport.excessAudit.excessCalories} kcal net surplus
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Exceeded Nutrients Badges */}
+                        <div className="flex flex-wrap gap-2">
+                          {generatedReport.excessAudit.exceededNutrients.map((n, idx) => (
+                            <span
+                              key={idx}
+                              className="px-2.5 py-1 rounded-lg bg-red-950 border border-red-700 text-red-300 text-xs font-extrabold"
+                            >
+                              ⚠️ {n.nutrient} exceeded by +{n.excessAmount} {n.unit}
+                            </span>
+                          ))}
+                        </div>
+
+                        {/* Excess Fat Science explanation */}
+                        <div className="p-3 rounded-lg bg-slate-950/80 border border-amber-800/60 text-xs leading-relaxed text-slate-300">
+                          <strong className="text-amber-400 block mb-1">
+                            🧬 Excess Fat Accumulation Science:
+                          </strong>
+                          All surplus macronutrients (fats, carbs, protein) consumed above daily metabolic expenditure are converted and stored as adipose tissue (1 kg body fat ≈ 7,700 kcal). Dietary fat is stored with highest metabolic efficiency (97–98%). This day&apos;s surplus of +{generatedReport.excessAudit.excessCalories} kcal equals ~<strong>{generatedReport.excessAudit.potentialBodyFatGrams}g</strong> potential body fat accumulation.
+                        </div>
+
+                        {/* Compensatory Workout Offset */}
+                        <div className="pt-2 border-t border-amber-800/60">
+                          <div className="text-xs font-black uppercase text-amber-300 flex items-center gap-1.5 mb-2">
+                            <Activity className="w-4 h-4 text-orange-400" />
+                            <span>Compensatory Workout Required to Offset Surplus (+{generatedReport.excessAudit.excessCalories} kcal):</span>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
+                            <div className="p-2.5 rounded-lg bg-slate-950 border border-slate-800 flex items-center gap-2">
+                              <Footprints className="w-4 h-4 text-orange-400 shrink-0" />
+                              <div>
+                                <span className="font-bold text-white block">
+                                  {generatedReport.excessAudit.workoutOffset.walkingMinutes} Mins Brisk Walk
+                                </span>
+                                <span className="text-[10px] text-slate-400">~{generatedReport.excessAudit.workoutOffset.walkingSteps.toLocaleString()} steps</span>
+                              </div>
+                            </div>
+                            <div className="p-2.5 rounded-lg bg-slate-950 border border-slate-800 flex items-center gap-2">
+                              <Flame className="w-4 h-4 text-red-400 shrink-0" />
+                              <div>
+                                <span className="font-bold text-white block">
+                                  {generatedReport.excessAudit.workoutOffset.runningMinutes} Mins Jogging
+                                </span>
+                                <span className="text-[10px] text-slate-400">8.5 METs cardio</span>
+                              </div>
+                            </div>
+                            <div className="p-2.5 rounded-lg bg-slate-950 border border-slate-800 flex items-center gap-2">
+                              <Dumbbell className="w-4 h-4 text-purple-400 shrink-0" />
+                              <div>
+                                <span className="font-bold text-white block">
+                                  {generatedReport.excessAudit.workoutOffset.gymMinutes} Mins Gym Training
+                                </span>
+                                <span className="text-[10px] text-slate-400">5.5 METs hypertrophy</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-800 text-emerald-400 text-xs font-semibold flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4" />
+                        <span>✅ Target Compliance: Daily calorie and fat intake stayed safely within target limits. Zero excess body fat accumulation.</span>
+                      </div>
+                    )}
 
                     {/* Nutrient Consumption Summary Table */}
                     <div className="overflow-x-auto rounded-xl border border-slate-800">
@@ -1748,9 +1875,15 @@ export default function AdminPortalPage() {
                               {generatedReport.totals.calories - generatedReport.targets.calories} kcal
                             </td>
                             <td className="py-2.5 px-4 text-right">
-                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-800">
-                                {generatedReport.compliance.metCalories ? "Optimal" : "Under Target"}
-                              </span>
+                              {generatedReport.excessAudit.excessCalories > 0 ? (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-950 text-red-400 border border-red-800">
+                                  ⚠️ Limit Exceeded
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-800">
+                                  {generatedReport.compliance.metCalories ? "Optimal" : "Under Target"}
+                                </span>
+                              )}
                             </td>
                           </tr>
                           <tr>
@@ -1762,7 +1895,7 @@ export default function AdminPortalPage() {
                             </td>
                             <td className="py-2.5 px-4 text-right">
                               <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-800">
-                                {generatedReport.compliance.metProtein ? "Target Met" : "In Progress"}
+                                {generatedReport.compliance.metProtein ? "🎯 Target Met" : "In Progress"}
                               </span>
                             </td>
                           </tr>
@@ -1774,7 +1907,13 @@ export default function AdminPortalPage() {
                               {Math.round((generatedReport.totals.carbs - generatedReport.targets.carbs) * 10) / 10}g
                             </td>
                             <td className="py-2.5 px-4 text-right">
-                              <span className="text-slate-400">Tracked</span>
+                              {generatedReport.totals.carbs > generatedReport.targets.carbs ? (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-950 text-amber-400 border border-amber-800">
+                                  ⚠️ Surplus
+                                </span>
+                              ) : (
+                                <span className="text-slate-400">Tracked</span>
+                              )}
                             </td>
                           </tr>
                           <tr>
@@ -1785,7 +1924,15 @@ export default function AdminPortalPage() {
                               {Math.round((generatedReport.totals.fat - generatedReport.targets.fat) * 10) / 10}g
                             </td>
                             <td className="py-2.5 px-4 text-right">
-                              <span className="text-slate-400">Tracked</span>
+                              {generatedReport.totals.fat > generatedReport.targets.fat ? (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-950 text-red-400 border border-red-800">
+                                  ⚠️ Fat Exceeded
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-800">
+                                  Within Budget
+                                </span>
+                              )}
                             </td>
                           </tr>
                           <tr>
@@ -1869,7 +2016,7 @@ export default function AdminPortalPage() {
                     </div>
 
                     {/* Cumulative Master Metric Cards */}
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3 text-xs">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-8 gap-3 text-xs">
                       <div className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800">
                         <p className="text-slate-400">Total Days Tracked</p>
                         <p className="font-extrabold text-white text-xl mt-1">{allDaysReport.totalDays} Days</p>
@@ -1891,8 +2038,18 @@ export default function AdminPortalPage() {
                         <p className="font-extrabold text-cyan-400 text-xl mt-1">{allDaysReport.avgWater} ml</p>
                       </div>
                       <div className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800">
-                        <p className="text-slate-400">Dinner Cutoff Compliance</p>
+                        <p className="text-slate-400">Dinner Compliance</p>
                         <p className="font-extrabold text-emerald-400 text-xl mt-1">{allDaysReport.dinnerCompliancePct}%</p>
+                      </div>
+                      <div className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800">
+                        <p className="text-slate-400">Flagged Days (Surplus)</p>
+                        <p className={`font-extrabold text-xl mt-1 ${allDaysReport.flaggedDaysCount > 0 ? "text-red-400" : "text-emerald-400"}`}>
+                          {allDaysReport.flaggedDaysCount} Days
+                        </p>
+                      </div>
+                      <div className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800">
+                        <p className="text-slate-400">Compensatory Walk</p>
+                        <p className="font-extrabold text-orange-400 text-xl mt-1">{allDaysReport.totalCompensatoryWalkMinutes} Mins</p>
                       </div>
                     </div>
 
@@ -1913,13 +2070,15 @@ export default function AdminPortalPage() {
                               <th className="py-2.5 px-4">Fat</th>
                               <th className="py-2.5 px-4">Water</th>
                               <th className="py-2.5 px-4">Dinner Time</th>
-                              <th className="py-2.5 px-4 text-right">Cutoff Status</th>
+                              <th className="py-2.5 px-4">Cutoff</th>
+                              <th className="py-2.5 px-4">Surplus / Day Flag</th>
+                              <th className="py-2.5 px-4 text-right">Workout Offset</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-800">
                             {allDaysReport.days.length === 0 ? (
                               <tr>
-                                <td colSpan={9} className="py-6 text-center text-slate-500">
+                                <td colSpan={11} className="py-6 text-center text-slate-500">
                                   No historical intake entries found for this user.
                                 </td>
                               </tr>
@@ -1934,7 +2093,7 @@ export default function AdminPortalPage() {
                                   <td className="py-2.5 px-4 text-purple-400">{d.totals.fat}g</td>
                                   <td className="py-2.5 px-4 text-cyan-400">{d.waterMl > 0 ? `${d.waterMl} ml` : "—"}</td>
                                   <td className="py-2.5 px-4 text-slate-300">{d.dinnerTime || "No Dinner"}</td>
-                                  <td className="py-2.5 px-4 text-right">
+                                  <td className="py-2.5 px-4">
                                     <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                                       d.dinnerFollowedCutoff
                                         ? "bg-emerald-950 text-emerald-400 border border-emerald-800"
@@ -1942,6 +2101,26 @@ export default function AdminPortalPage() {
                                     }`}>
                                       {d.dinnerFollowedCutoff ? "Compliant" : "Cutoff Missed"}
                                     </span>
+                                  </td>
+                                  <td className="py-2.5 px-4">
+                                    {d.excessAudit.isDayExceeded ? (
+                                      <span className="px-2 py-0.5 rounded text-[10px] font-black bg-red-950 text-red-400 border border-red-800">
+                                        ⚠️ Flagged (+{d.excessAudit.excessCalories} kcal, ~{d.excessAudit.potentialBodyFatGrams}g fat)
+                                      </span>
+                                    ) : (
+                                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-800">
+                                        ✅ Target Met
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="py-2.5 px-4 text-right">
+                                    {d.excessAudit.isDayExceeded ? (
+                                      <span className="text-[11px] text-amber-300 font-semibold">
+                                        🚶 {d.excessAudit.workoutOffset.walkingMinutes}m walk (~{d.excessAudit.workoutOffset.walkingSteps.toLocaleString()} st)
+                                      </span>
+                                    ) : (
+                                      <span className="text-slate-500 text-[11px]">None required</span>
+                                    )}
                                   </td>
                                 </tr>
                               ))

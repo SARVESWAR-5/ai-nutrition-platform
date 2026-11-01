@@ -14,6 +14,8 @@ import { authService } from "@/lib/services/auth-service";
 import { getLocalTodayDateString } from "@/lib/date/date-service";
 import { InterpretedMeal } from "@/lib/services/types";
 import { waterService } from "@/lib/services/water-service";
+import { nutritionGoalEngine, PostMealEncouragement } from "@/lib/services/nutrition-goal-engine";
+import { weightService } from "@/lib/services/weight-service";
 import {
   Sparkles,
   CheckCircle2,
@@ -34,6 +36,9 @@ import {
   Minus,
   FileText,
   Droplets,
+  Dumbbell,
+  Activity,
+  Footprints,
 } from "lucide-react";
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -59,6 +64,7 @@ export default function AddFoodPage() {
     subtracted: { calories: number; protein: number; carbs: number; fat: number; fibre: number; waterMl?: number };
     newRemaining: { calories: number; protein: number; carbs: number; fat: number; fibre: number; waterMl: number };
   } | null>(null);
+  const [postMealFeedback, setPostMealFeedback] = React.useState<PostMealEncouragement | null>(null);
 
   const [targets, setTargets] = React.useState<NutritionGoals>(DEFAULT_NUTRITION_TARGETS);
   const [todayTotals, setTodayTotals] = React.useState({ calories: 0, protein: 0, carbs: 0, fat: 0, fibre: 0, waterMl: 0 });
@@ -230,8 +236,9 @@ export default function AddFoodPage() {
       waterMl: Math.max(0, waterTarget - newWater),
     };
 
+    const mealNameStr = interpretedMeal.items.map((i) => i.name).join(", ");
     setSavedSummary({
-      mealName: interpretedMeal.items.map((i) => i.name).join(", "),
+      mealName: mealNameStr,
       subtracted: {
         calories: interpretedMeal.totalNutrients.calories,
         protein: interpretedMeal.totalNutrients.protein,
@@ -243,6 +250,10 @@ export default function AddFoodPage() {
       newRemaining: newRem,
     });
 
+    const userWeight = weightService.getLatestMeasurement()?.weightKg || 75;
+    const encouragement = nutritionGoalEngine.getPostMealEncouragement(newTotals, targets, mealNameStr, userWeight);
+    setPostMealFeedback(encouragement);
+
     setSaveStatus("saved");
     refreshDayStatus();
   };
@@ -252,6 +263,7 @@ export default function AddFoodPage() {
     setInterpretedMeal(null);
     setSaveStatus("idle");
     setSavedSummary(null);
+    setPostMealFeedback(null);
   };
 
   const handleLogSavedFood = (food: SavedFoodItem, multiplier: number, category: MealCategory) => {
@@ -294,11 +306,16 @@ export default function AddFoodPage() {
       waterMl: Math.max(0, waterTarget - newWater),
     };
 
+    const savedMealStr = `${food.name} (${qty} ${food.unit})`;
     setSavedSummary({
-      mealName: `${food.name} (${qty} ${food.unit})`,
+      mealName: savedMealStr,
       subtracted: { calories: cals, protein, carbs, fat, fibre },
       newRemaining: newRem,
     });
+
+    const userWeight = weightService.getLatestMeasurement()?.weightKg || 75;
+    const encouragement = nutritionGoalEngine.getPostMealEncouragement(newTotals, targets, savedMealStr, userWeight);
+    setPostMealFeedback(encouragement);
 
     setSelectedSavedFood(null);
     setPortionMultiplier(1.0);
@@ -437,6 +454,105 @@ export default function AddFoodPage() {
                   <span>• <strong>{savedSummary.newRemaining.fat}g</strong> Fat</span>
                   <span>• <strong>{savedSummary.newRemaining.waterMl} ml</strong> Water</span>
                 </div>
+
+                {/* Feature: Post-Meal Encouragement & Motivation */}
+                {postMealFeedback && (
+                  <div className="mt-4 space-y-3">
+                    {/* Encouragement text */}
+                    <div className="p-3.5 rounded-xl bg-white/90 dark:bg-slate-900/90 border border-emerald-300 dark:border-emerald-700 shadow-sm">
+                      <div className="text-xs font-bold text-emerald-900 dark:text-emerald-200 flex items-center gap-1.5 mb-1">
+                        <Sparkles className="w-4 h-4 text-amber-500" />
+                        <span>Daily Goal Progress &amp; Motivation:</span>
+                      </div>
+                      <p className="text-xs text-slate-700 dark:text-slate-200 leading-relaxed font-medium">
+                        {postMealFeedback.motivationMessage}
+                      </p>
+                    </div>
+
+                    {/* Fulfilled Nutrients Celebration Badge */}
+                    {postMealFeedback.fulfilledBadge && (
+                      <div className="p-3 rounded-xl bg-blue-50 dark:bg-blue-950/50 border border-blue-300 dark:border-blue-700 text-xs font-extrabold text-blue-900 dark:text-blue-200 flex items-center gap-2 shadow-sm">
+                        <CheckCircle2 className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
+                        <span>{postMealFeedback.fulfilledBadge}</span>
+                      </div>
+                    )}
+
+                    {/* Exceeded Nutrient & Day Flag with Compensatory Workout */}
+                    {postMealFeedback.audit.isDayExceeded && (
+                      <div className="p-4 rounded-xl bg-amber-50/90 dark:bg-amber-950/60 border-2 border-amber-500 text-amber-950 dark:text-amber-100 shadow-sm space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 font-black text-sm text-amber-900 dark:text-amber-300 uppercase tracking-wide">
+                            <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                            <span>⚠️ Limit Exceeded • Day Flagged</span>
+                          </div>
+                          <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-red-600 text-white shadow-sm">
+                            Day Flagged
+                          </span>
+                        </div>
+                        <p className="text-xs font-semibold text-amber-900 dark:text-amber-200">
+                          {postMealFeedback.subheadline}
+                        </p>
+
+                        {/* Exceeded Nutrients Badges */}
+                        <div className="flex flex-wrap gap-2">
+                          {postMealFeedback.audit.exceededNutrients.map((n, idx) => (
+                            <span
+                              key={idx}
+                              className="px-2.5 py-1 rounded-lg bg-red-100 dark:bg-red-950 border border-red-300 dark:border-red-800 text-red-800 dark:text-red-300 text-xs font-extrabold"
+                            >
+                              ⚠️ {n.nutrient} exceeded by +{n.excessAmount} {n.unit}
+                            </span>
+                          ))}
+                        </div>
+
+                        {/* Excess Fat Science explanation */}
+                        <div className="p-3 rounded-lg bg-white/95 dark:bg-slate-900/95 border border-amber-200 dark:border-amber-800 text-[11px] leading-relaxed text-slate-700 dark:text-slate-300">
+                          <strong className="text-amber-900 dark:text-amber-300 block mb-1">
+                            🧬 Metabolic Science: Excess Nutrients &amp; Adipose Fat Conversion
+                          </strong>
+                          {postMealFeedback.fatScienceExplanation}
+                        </div>
+
+                        {/* Compensatory Workout Offset */}
+                        <div className="pt-2 border-t border-amber-200 dark:border-amber-800/60">
+                          <div className="text-xs font-black uppercase text-amber-900 dark:text-amber-300 flex items-center gap-1.5 mb-2">
+                            <Activity className="w-4 h-4 text-orange-600" />
+                            <span>Compensatory Workout Offset to Burn Excess (+{postMealFeedback.audit.excessCalories} kcal):</span>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                            <div className="p-2.5 rounded-lg bg-orange-100/70 dark:bg-orange-950/40 border border-orange-200 dark:border-orange-800 flex items-center gap-2">
+                              <Footprints className="w-4 h-4 text-orange-600 shrink-0" />
+                              <div>
+                                <span className="font-bold text-slate-900 dark:text-white block">
+                                  {postMealFeedback.audit.workoutOffset.walkingMinutes} Mins Walk
+                                </span>
+                                <span className="text-[10px] text-slate-500">~{postMealFeedback.audit.workoutOffset.walkingSteps.toLocaleString()} brisk steps</span>
+                              </div>
+                            </div>
+                            <div className="p-2.5 rounded-lg bg-red-100/70 dark:bg-red-950/40 border border-red-200 dark:border-red-800 flex items-center gap-2">
+                              <Flame className="w-4 h-4 text-red-600 shrink-0" />
+                              <div>
+                                <span className="font-bold text-slate-900 dark:text-white block">
+                                  {postMealFeedback.audit.workoutOffset.runningMinutes} Mins Jogging
+                                </span>
+                                <span className="text-[10px] text-slate-500">8.5 METs cardio pace</span>
+                              </div>
+                            </div>
+                            <div className="p-2.5 rounded-lg bg-purple-100/70 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800 flex items-center gap-2">
+                              <Dumbbell className="w-4 h-4 text-purple-600 shrink-0" />
+                              <div>
+                                <span className="font-bold text-slate-900 dark:text-white block">
+                                  {postMealFeedback.audit.workoutOffset.gymMinutes} Mins Gym Training
+                                </span>
+                                <span className="text-[10px] text-slate-500">5.5 METs hypertrophy load</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Quick Action Navigation */}
                 <div className="mt-4 flex flex-wrap items-center gap-3">

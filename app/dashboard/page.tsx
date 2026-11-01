@@ -12,6 +12,7 @@ import { preferencesService, formatTime12h, UserPreferences, MealCutoffs, DEFAUL
 import { authService, UserSession } from "@/lib/services/auth-service";
 import { cloudSyncService } from "@/lib/services/cloud-sync-service";
 import { getLocalTodayDateString } from "@/lib/date/date-service";
+import { weightService } from "@/lib/services/weight-service";
 import {
   BarChart,
   Bar,
@@ -35,6 +36,7 @@ import {
   Flame,
   CheckCircle2,
   AlertCircle,
+  AlertTriangle,
   Clock,
   ArrowRight,
   ShieldCheck,
@@ -44,6 +46,9 @@ import {
   Settings2,
   SlidersHorizontal,
   X,
+  Activity,
+  Footprints,
+  Dumbbell,
 } from "lucide-react";
 
 const MACRO_COLORS = ["#10b981", "#3b82f6", "#f59e0b"]; // Protein, Carbs, Fat
@@ -164,6 +169,12 @@ export default function DashboardPage() {
       progress.protein.consumed >= progress.protein.target * 0.95
     );
   }, [progress]);
+
+  // Nutrient excess & compensatory workout audit
+  const excessAudit = React.useMemo(() => {
+    const userWeight = weightService.getLatestMeasurement()?.weightKg || 75;
+    return nutritionGoalEngine.calculateExcessAndCompensatoryWorkouts(dailyTotals, targets, userWeight);
+  }, [dailyTotals, targets]);
 
   // Macro calorie split & discrepancy
   const macroCalc = React.useMemo(() => {
@@ -355,16 +366,100 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Feature 06: Accurate Calorie & Nutrient Excess Display (Surplus tracking, not failure) */}
-        {progress.calories.excess > 0 && (
+        {/* Feature: Fulfilled Nutrient Goal Notification */}
+        {excessAudit.fulfilledNutrients.length > 0 && (
+          <div className="mb-4 p-3 rounded-xl bg-blue-50 dark:bg-blue-950/50 border border-blue-300 dark:border-blue-700 text-xs font-extrabold text-blue-900 dark:text-blue-200 flex items-center gap-2 shadow-sm animate-fade-in">
+            <CheckCircle2 className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
+            <span>🎯 Daily Goal Fulfilled: {excessAudit.fulfilledNutrients.join(", ")} reached 100% target!</span>
+          </div>
+        )}
+
+        {/* Feature: Nutrient Limit Exceeded, Day Flagged & Compensatory Workout Offset */}
+        {excessAudit.isDayExceeded ? (
+          <div className="mb-6 p-5 rounded-2xl bg-amber-50/90 dark:bg-amber-950/60 border-2 border-amber-500 text-amber-950 dark:text-amber-100 shadow-sm space-y-3 animate-fade-in">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-amber-200 dark:border-amber-800/80 pb-3">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0" />
+                <h3 className="text-base font-extrabold text-amber-900 dark:text-amber-300">
+                  ⚠️ Nutrient Limit Exceeded • Day Flagged
+                </h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-black uppercase px-2.5 py-1 rounded bg-red-600 text-white shadow-sm">
+                  Day Flagged
+                </span>
+                <span className="text-xs font-bold text-amber-800 dark:text-amber-200">
+                  +{excessAudit.excessCalories} kcal surplus
+                </span>
+              </div>
+            </div>
+
+            {/* Exceeded Nutrients Badges */}
+            <div className="flex flex-wrap gap-2 pt-1">
+              {excessAudit.exceededNutrients.map((n, idx) => (
+                <span
+                  key={idx}
+                  className="px-2.5 py-1 rounded-lg bg-red-100 dark:bg-red-950 border border-red-300 dark:border-red-800 text-red-800 dark:text-red-300 text-xs font-extrabold"
+                >
+                  ⚠️ {n.nutrient} exceeded by +{n.excessAmount} {n.unit}
+                </span>
+              ))}
+            </div>
+
+            {/* Excess Fat Science explanation */}
+            <div className="p-3 rounded-xl bg-white/95 dark:bg-slate-900/95 border border-amber-200 dark:border-amber-800 text-xs leading-relaxed text-slate-700 dark:text-slate-300">
+              <strong className="text-amber-900 dark:text-amber-300 block mb-1">
+                🧬 Metabolic Science: Excess Nutrients &amp; Adipose Fat Conversion
+              </strong>
+              All macronutrients (fats, carbs, protein) consumed above daily metabolic expenditure are converted and stored as adipose body fat (1 kg body fat ≈ 7,700 kcal). Dietary fat is stored with highest metabolic efficiency (97–98%). Your surplus of +{excessAudit.excessCalories} kcal equals ~<strong>{excessAudit.potentialBodyFatGrams}g</strong> potential body fat accumulation unless expended through physical exercise.
+            </div>
+
+            {/* Compensatory Workout Offset */}
+            <div className="pt-2 border-t border-amber-200 dark:border-amber-800/60">
+              <div className="text-xs font-black uppercase text-amber-900 dark:text-amber-300 flex items-center gap-1.5 mb-2">
+                <Activity className="w-4 h-4 text-orange-600" />
+                <span>Compensatory Workout Offset to Burn Excess (+{excessAudit.excessCalories} kcal):</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                <div className="p-3 rounded-xl bg-orange-100/70 dark:bg-orange-950/40 border border-orange-200 dark:border-orange-800 flex items-center gap-2.5">
+                  <Footprints className="w-5 h-5 text-orange-600 shrink-0" />
+                  <div>
+                    <span className="font-extrabold text-slate-900 dark:text-white block">
+                      {excessAudit.workoutOffset.walkingMinutes} Mins Brisk Walk
+                    </span>
+                    <span className="text-[11px] text-slate-500">~{excessAudit.workoutOffset.walkingSteps.toLocaleString()} steps at 3.5 METs</span>
+                  </div>
+                </div>
+                <div className="p-3 rounded-xl bg-red-100/70 dark:bg-red-950/40 border border-red-200 dark:border-red-800 flex items-center gap-2.5">
+                  <Flame className="w-5 h-5 text-red-600 shrink-0" />
+                  <div>
+                    <span className="font-extrabold text-slate-900 dark:text-white block">
+                      {excessAudit.workoutOffset.runningMinutes} Mins Jogging
+                    </span>
+                    <span className="text-[11px] text-slate-500">8.5 METs cardio burn</span>
+                  </div>
+                </div>
+                <div className="p-3 rounded-xl bg-purple-100/70 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800 flex items-center gap-2.5">
+                  <Dumbbell className="w-5 h-5 text-purple-600 shrink-0" />
+                  <div>
+                    <span className="font-extrabold text-slate-900 dark:text-white block">
+                      {excessAudit.workoutOffset.gymMinutes} Mins Gym Training
+                    </span>
+                    <span className="text-[11px] text-slate-500">5.5 METs strength session</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : progress.calories.excess > 0 ? (
           <div className="mb-6 p-4 rounded-xl bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 text-xs text-blue-900 dark:text-blue-200 flex items-center gap-3 shadow-sm">
             <AlertCircle className="w-5 h-5 text-blue-600 shrink-0" />
             <div>
               <span className="font-bold">Accurate Calorie Surplus Tracking:</span> You have consumed{" "}
-              <strong className="text-blue-700 dark:text-blue-300">+{progress.calories.excess} kcal</strong> beyond your baseline target. Recorded as affirmative surplus rather than treated as a failure.
+              <strong className="text-blue-700 dark:text-blue-300">+{progress.calories.excess} kcal</strong> beyond your baseline target.
             </div>
           </div>
-        )}
+        ) : null}
 
         {/* Live Daily Remaining Balance Card (The Core Countdown Feature) */}
         <div className="mb-8 p-5 rounded-2xl bg-gradient-to-r from-slate-900 via-slate-850 to-slate-900 text-white shadow-md border border-slate-800">
@@ -384,48 +479,92 @@ export default function DashboardPage() {
 
           <div className="grid grid-cols-2 md:grid-cols-6 gap-3 pt-1">
             {/* Calories countdown */}
-            <div className="p-3 rounded-xl bg-slate-800/80 border border-slate-700/60">
-              <span className="text-[10px] uppercase font-bold text-orange-400 block">Remaining Calories</span>
-              <div className="text-2xl font-black text-white mt-0.5">
-                {progress.calories.remaining} <span className="text-xs font-normal text-slate-400">kcal</span>
+            {progress.calories.excess > 0 ? (
+              <div className="p-3 rounded-xl bg-red-950/60 border border-red-700/80">
+                <span className="text-[10px] uppercase font-black text-red-400 flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3" />
+                  <span>Calories Exceeded</span>
+                </span>
+                <div className="text-2xl font-black text-red-400 mt-0.5">
+                  +{progress.calories.excess} <span className="text-xs font-normal text-red-300">kcal over</span>
+                </div>
+                <div className="text-[10px] text-red-300 mt-1 font-extrabold uppercase">
+                  ⚠️ Day Flagged
+                </div>
               </div>
-              <div className="text-[11px] text-slate-400 mt-1">
-                {progress.calories.consumed} kcal eaten of {progress.calories.target}
+            ) : (
+              <div className="p-3 rounded-xl bg-slate-800/80 border border-slate-700/60">
+                <span className="text-[10px] uppercase font-bold text-orange-400 block">Remaining Calories</span>
+                <div className="text-2xl font-black text-white mt-0.5">
+                  {progress.calories.remaining} <span className="text-xs font-normal text-slate-400">kcal</span>
+                </div>
+                <div className="text-[11px] text-slate-400 mt-1">
+                  {progress.calories.consumed} kcal eaten of {targets.calories}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Protein countdown */}
             <div className="p-3 rounded-xl bg-slate-800/80 border border-slate-700/60">
-              <span className="text-[10px] uppercase font-bold text-emerald-400 block">Remaining Protein</span>
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] uppercase font-bold text-emerald-400 block">Remaining Protein</span>
+                {progress.protein.consumed >= progress.protein.target && (
+                  <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                    Fulfilled
+                  </span>
+                )}
+              </div>
               <div className="text-2xl font-black text-emerald-400 mt-0.5">
                 {progress.protein.remaining} <span className="text-xs font-normal text-slate-400">g</span>
               </div>
               <div className="text-[11px] text-slate-400 mt-1">
-                {progress.protein.consumed}g eaten of {progress.protein.target}g
+                {progress.protein.consumed}g eaten of {targets.protein}g
               </div>
             </div>
 
             {/* Carbs countdown */}
-            <div className="p-3 rounded-xl bg-slate-800/80 border border-slate-700/60">
-              <span className="text-[10px] uppercase font-bold text-blue-400 block">Remaining Carbs</span>
+            <div className={`p-3 rounded-xl border ${progress.carbs.excess > 0 ? "bg-amber-950/40 border-amber-700/60" : "bg-slate-800/80 border-slate-700/60"}`}>
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] uppercase font-bold text-blue-400 block">Remaining Carbs</span>
+                {progress.carbs.excess > 0 && (
+                  <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                    +{progress.carbs.excess}g Over
+                  </span>
+                )}
+              </div>
               <div className="text-2xl font-black text-blue-400 mt-0.5">
                 {progress.carbs.remaining} <span className="text-xs font-normal text-slate-400">g</span>
               </div>
               <div className="text-[11px] text-slate-400 mt-1">
-                {progress.carbs.consumed}g eaten of {progress.carbs.target}g
+                {progress.carbs.consumed}g eaten of {targets.carbs}g
               </div>
             </div>
 
             {/* Fat countdown */}
-            <div className="p-3 rounded-xl bg-slate-800/80 border border-slate-700/60">
-              <span className="text-[10px] uppercase font-bold text-amber-400 block">Remaining Fat</span>
-              <div className="text-2xl font-black text-amber-400 mt-0.5">
-                {progress.fat.remaining} <span className="text-xs font-normal text-slate-400">g</span>
+            {progress.fat.excess > 0 ? (
+              <div className="p-3 rounded-xl bg-red-950/60 border border-red-700/80">
+                <span className="text-[10px] uppercase font-black text-red-400 flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3" />
+                  <span>Fat Exceeded</span>
+                </span>
+                <div className="text-2xl font-black text-red-400 mt-0.5">
+                  +{progress.fat.excess} <span className="text-xs font-normal text-red-300">g over</span>
+                </div>
+                <div className="text-[10px] text-red-300 mt-1 font-extrabold uppercase">
+                  ⚠️ Limit Exceeded
+                </div>
               </div>
-              <div className="text-[11px] text-slate-400 mt-1">
-                {progress.fat.consumed}g eaten of {progress.fat.target}g
+            ) : (
+              <div className="p-3 rounded-xl bg-slate-800/80 border border-slate-700/60">
+                <span className="text-[10px] uppercase font-bold text-amber-400 block">Remaining Fat</span>
+                <div className="text-2xl font-black text-amber-400 mt-0.5">
+                  {progress.fat.remaining} <span className="text-xs font-normal text-slate-400">g</span>
+                </div>
+                <div className="text-[11px] text-slate-400 mt-1">
+                  {progress.fat.consumed}g eaten of {targets.fat}g
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Fibre countdown */}
             <div className="p-3 rounded-xl bg-slate-800/80 border border-slate-700/60">
@@ -434,7 +573,7 @@ export default function DashboardPage() {
                 {progress.fibre.remaining} <span className="text-xs font-normal text-slate-400">g</span>
               </div>
               <div className="text-[11px] text-slate-400 mt-1">
-                {progress.fibre.consumed}g eaten of {progress.fibre.target}g
+                {progress.fibre.consumed}g eaten of {targets.fibre}g
               </div>
             </div>
 
@@ -445,7 +584,7 @@ export default function DashboardPage() {
                 {progress.water.remaining} <span className="text-xs font-normal text-slate-400">ml</span>
               </div>
               <div className="text-[11px] text-slate-400 mt-1">
-                {progress.water.consumed}ml drunk of {progress.water.target}ml
+                {progress.water.consumed}ml drunk of {targets.waterMl || 3000}ml
               </div>
             </div>
           </div>

@@ -33,6 +33,43 @@ export interface DailyInsightSummary {
   source: "deterministic_rules" | "gemini_ai";
 }
 
+export interface NutrientExcessAudit {
+  isDayExceeded: boolean;
+  excessCalories: number;
+  excessFatGrams: number;
+  potentialBodyFatGrams: number; // excessCalories / 7.7
+  exceededNutrients: Array<{
+    nutrient: string;
+    target: number;
+    consumed: number;
+    excessAmount: number;
+    unit: string;
+  }>;
+  fulfilledNutrients: string[];
+  remaining: {
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+    fibre: number;
+  };
+  workoutOffset: {
+    walkingMinutes: number;
+    walkingSteps: number;
+    runningMinutes: number;
+    gymMinutes: number;
+  };
+}
+
+export interface PostMealEncouragement {
+  headline: string;
+  subheadline: string;
+  motivationMessage: string;
+  fulfilledBadge?: string;
+  fatScienceExplanation?: string;
+  audit: NutrientExcessAudit;
+}
+
 export class NutritionGoalEngine {
   /**
    * Calculates progress for all primary nutrients given confirmed daily intake and targets.
@@ -190,6 +227,174 @@ Provide a concise, motivating 2-3 sentence nutritional coaching insight.`;
       bulletPoints: bullets,
       aiAnalysisText: aiText,
       source: "deterministic_rules",
+    };
+  }
+
+  /**
+   * Evaluates nutrient over-consumption, flags exceeded nutrients & day,
+   * calculates equivalent potential adipose body fat gain, and computes compensatory workouts.
+   */
+  public calculateExcessAndCompensatoryWorkouts(
+    consumed: NutrientValues,
+    targets: UserNutritionGoals = DEFAULT_NUTRITION_TARGETS,
+    userWeightKg: number = 75
+  ): NutrientExcessAudit {
+    const safeWeight = userWeightKg > 30 ? userWeightKg : 75;
+
+    const remaining = {
+      calories: Math.max(0, targets.calories - (consumed.calories || 0)),
+      protein: Math.max(0, Math.round((targets.protein - (consumed.protein || 0)) * 10) / 10),
+      carbs: Math.max(0, Math.round((targets.carbs - (consumed.carbs || 0)) * 10) / 10),
+      fat: Math.max(0, Math.round((targets.fat - (consumed.fat || 0)) * 10) / 10),
+      fibre: Math.max(0, Math.round((targets.fibre - (consumed.fibre || 0)) * 10) / 10),
+    };
+
+    const exceededNutrients: Array<{
+      nutrient: string;
+      target: number;
+      consumed: number;
+      excessAmount: number;
+      unit: string;
+    }> = [];
+
+    const fulfilledNutrients: string[] = [];
+
+    // Check Calories
+    if ((consumed.calories || 0) > targets.calories) {
+      exceededNutrients.push({
+        nutrient: "Calories",
+        target: targets.calories,
+        consumed: consumed.calories || 0,
+        excessAmount: (consumed.calories || 0) - targets.calories,
+        unit: "kcal",
+      });
+    } else if ((consumed.calories || 0) >= targets.calories * 0.95) {
+      fulfilledNutrients.push(`Calories (${targets.calories} kcal)`);
+    }
+
+    // Check Protein
+    if ((consumed.protein || 0) >= targets.protein) {
+      fulfilledNutrients.push(`Protein (${targets.protein}g)`);
+      if ((consumed.protein || 0) > targets.protein * 1.25) {
+        exceededNutrients.push({
+          nutrient: "Protein",
+          target: targets.protein,
+          consumed: consumed.protein || 0,
+          excessAmount: Math.round(((consumed.protein || 0) - targets.protein) * 10) / 10,
+          unit: "g",
+        });
+      }
+    }
+
+    // Check Fat
+    if ((consumed.fat || 0) > targets.fat) {
+      exceededNutrients.push({
+        nutrient: "Fat",
+        target: targets.fat,
+        consumed: consumed.fat || 0,
+        excessAmount: Math.round(((consumed.fat || 0) - targets.fat) * 10) / 10,
+        unit: "g",
+      });
+    } else if ((consumed.fat || 0) >= targets.fat * 0.95) {
+      fulfilledNutrients.push(`Fat (${targets.fat}g)`);
+    }
+
+    // Check Carbs
+    if ((consumed.carbs || 0) > targets.carbs) {
+      exceededNutrients.push({
+        nutrient: "Carbohydrates",
+        target: targets.carbs,
+        consumed: consumed.carbs || 0,
+        excessAmount: Math.round(((consumed.carbs || 0) - targets.carbs) * 10) / 10,
+        unit: "g",
+      });
+    } else if ((consumed.carbs || 0) >= targets.carbs * 0.95) {
+      fulfilledNutrients.push(`Carbohydrates (${targets.carbs}g)`);
+    }
+
+    // Check Fibre
+    if ((consumed.fibre || 0) >= targets.fibre) {
+      fulfilledNutrients.push(`Dietary Fibre (${targets.fibre}g)`);
+    }
+
+    const excessCalories = Math.max(0, (consumed.calories || 0) - targets.calories);
+    const excessFatGrams = Math.max(0, Math.round(((consumed.fat || 0) - targets.fat) * 10) / 10);
+    const isDayExceeded = excessCalories > 0 || excessFatGrams > 5;
+
+    // 1 kg human body fat tissue = ~7,700 kcal (7.7 kcal/g)
+    const potentialBodyFatGrams = excessCalories > 0 ? Math.round((excessCalories / 7.7) * 10) / 10 : 0;
+
+    // Workouts based on METs formula: kcal/min = (MET * 3.5 * weightKg) / 200
+    // Walking (3.5 METs): kcal/min ≈ 4.6
+    const walkingKcalPerMin = (3.5 * 3.5 * safeWeight) / 200;
+    const runningKcalPerMin = (8.5 * 3.5 * safeWeight) / 200;
+    const gymKcalPerMin = (5.5 * 3.5 * safeWeight) / 200;
+
+    const walkingMinutes = excessCalories > 0 ? Math.ceil(excessCalories / walkingKcalPerMin) : 0;
+    const walkingSteps = excessCalories > 0 ? Math.round(excessCalories * 22) : 0;
+    const runningMinutes = excessCalories > 0 ? Math.ceil(excessCalories / runningKcalPerMin) : 0;
+    const gymMinutes = excessCalories > 0 ? Math.ceil(excessCalories / gymKcalPerMin) : 0;
+
+    return {
+      isDayExceeded,
+      excessCalories,
+      excessFatGrams,
+      potentialBodyFatGrams,
+      exceededNutrients,
+      fulfilledNutrients,
+      remaining,
+      workoutOffset: {
+        walkingMinutes,
+        walkingSteps,
+        runningMinutes,
+        gymMinutes,
+      },
+    };
+  }
+
+  /**
+   * Generates instant post-meal encouragement message with remaining goals, fulfilled badges,
+   * flags, and workout offset if limit exceeded.
+   */
+  public getPostMealEncouragement(
+    consumed: NutrientValues,
+    targets: UserNutritionGoals = DEFAULT_NUTRITION_TARGETS,
+    mealName?: string,
+    userWeightKg: number = 75
+  ): PostMealEncouragement {
+    const audit = this.calculateExcessAndCompensatoryWorkouts(consumed, targets, userWeightKg);
+
+    let headline = "Meal Successfully Logged!";
+    if (mealName) {
+      headline = `${mealName} Successfully Logged!`;
+    }
+
+    let subheadline = "Great consistency! Keep up the momentum toward your daily target.";
+    let motivationMessage = `Further remaining to achieve today's goal: ${audit.remaining.calories} kcal, ${audit.remaining.protein}g Protein, ${audit.remaining.carbs}g Carbs, ${audit.remaining.fat}g Fat.`;
+
+    let fulfilledBadge: string | undefined;
+    if (audit.fulfilledNutrients.length > 0) {
+      fulfilledBadge = `🎯 Goal Fulfilled: ${audit.fulfilledNutrients.join(", ")} reached 100% target!`;
+    }
+
+    let fatScienceExplanation: string | undefined;
+
+    if (audit.isDayExceeded) {
+      headline = "⚠️ Daily Nutrient Limit Exceeded (Day Flagged)";
+      subheadline = `You have exceeded your target budget by +${audit.excessCalories} kcal (${audit.potentialBodyFatGrams}g potential adipose fat gain).`;
+      motivationMessage = `Extra Compensatory Workout to Burn Excess: ${audit.workoutOffset.walkingMinutes} mins brisk walk (~${audit.workoutOffset.walkingSteps.toLocaleString()} steps), ${audit.workoutOffset.runningMinutes} mins jogging, or ${audit.workoutOffset.gymMinutes} mins gym strength workout.`;
+      fatScienceExplanation = `Excess Caloric Storage Science: All macronutrients (dietary fats, carbohydrates, and protein) ingested in excess of daily metabolic expenditure are converted and stored as adipose body fat. While dietary fat is stored directly with 97–98% metabolic efficiency, surplus carbs and protein spare fat burning and undergo conversion (1 kg adipose body fat ≈ 7,700 kcal). Your surplus of +${audit.excessCalories} kcal represents ~${audit.potentialBodyFatGrams}g potential body fat accumulation.`;
+    } else {
+      fatScienceExplanation = "Metabolic Balance: Consumed nutrients are directly fueling muscle recovery, protein synthesis, and vital metabolic activity within your daily target budget.";
+    }
+
+    return {
+      headline,
+      subheadline,
+      motivationMessage,
+      fulfilledBadge,
+      fatScienceExplanation,
+      audit,
     };
   }
 }

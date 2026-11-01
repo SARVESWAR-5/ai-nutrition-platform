@@ -21,6 +21,7 @@ import {
   CheckCircle2,
   X,
   Plus,
+  Target,
 } from "lucide-react";
 
 export default function OnboardingPage() {
@@ -41,7 +42,7 @@ export default function OnboardingPage() {
     activityLevel: "moderate" as "sedentary" | "light" | "moderate" | "very_active" | "extra_active",
     preferredDinnerCutoff: "19:00",
     foodsAvoided: [] as string[],
-    fitnessGoal: "fat_loss" as "fat_loss" | "muscle_gain" | "maintenance" | "recomposition",
+    fitnessGoal: "target_weight" as "target_weight" | "fat_loss" | "muscle_gain" | "maintenance" | "recomposition",
   });
 
   // Natural Language Prompt for Foods Excluded
@@ -59,22 +60,24 @@ export default function OnboardingPage() {
     }
   }, []);
 
-  // Live Bodybuilding Protocols Calculation
+  // Live Bodybuilding Protocols Calculation (including Target Weight Achievement)
   const protocolsData = React.useMemo(() => {
     const ageNum = typeof formData.age === "number" ? formData.age : Number(formData.age) || 25;
     const heightNum = typeof formData.heightCm === "number" ? formData.heightCm : Number(formData.heightCm) || 170;
     const weightNum = typeof formData.currentWeightKg === "number" ? formData.currentWeightKg : Number(formData.currentWeightKg) || 70;
+    const targetWeightNum = typeof formData.targetWeightKg === "number" ? formData.targetWeightKg : Number(formData.targetWeightKg) || weightNum;
 
     return calculateBodybuildingProtocols({
       age: ageNum,
       sex: formData.sex,
       heightCm: heightNum,
       currentWeightKg: weightNum,
+      targetWeightKg: targetWeightNum,
       activityLevel: formData.activityLevel,
     });
-  }, [formData.age, formData.sex, formData.heightCm, formData.currentWeightKg, formData.activityLevel]);
+  }, [formData.age, formData.sex, formData.heightCm, formData.currentWeightKg, formData.targetWeightKg, formData.activityLevel]);
 
-  const activeProtocol = protocolsData.protocols[formData.fitnessGoal];
+  const activeProtocol = protocolsData.protocols[formData.fitnessGoal] || protocolsData.protocols.target_weight;
 
   // Parse natural language exclusion prompt
   const handleParseExclusionPrompt = () => {
@@ -239,6 +242,30 @@ export default function OnboardingPage() {
                     className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-semibold"
                   />
                 </div>
+
+                {/* Live Target Weight Criteria Feedback */}
+                {Number(formData.currentWeightKg) > 0 && Number(formData.targetWeightKg) > 0 && (
+                  <div className="sm:col-span-2 p-3.5 rounded-xl bg-purple-50/80 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800 text-xs">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <Target className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0" />
+                        <span className="font-extrabold text-purple-950 dark:text-purple-200">
+                          {protocolsData.targetWeightAnalysis?.action === "reduce"
+                            ? `Weight Reduction Goal: Reduce ${Math.abs(protocolsData.targetWeightAnalysis.weightDeltaKg)} kg`
+                            : protocolsData.targetWeightAnalysis?.action === "gain"
+                            ? `Weight Gain Goal: Gain +${protocolsData.targetWeightAnalysis.weightDeltaKg} kg`
+                            : "Weight Maintenance Goal: Steady State"}
+                        </span>
+                      </div>
+                      <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-purple-200 dark:bg-purple-900 text-purple-800 dark:text-purple-200">
+                        {protocolsData.targetWeightAnalysis?.action === "reduce" ? "Cut Protocol" : protocolsData.targetWeightAnalysis?.action === "gain" ? "Bulk Protocol" : "Maintain"}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-1">
+                      {protocolsData.targetWeightAnalysis?.targetPaceDescription}
+                    </p>
+                  </div>
+                )}
               </div>
 
               <div className="pt-4 flex justify-end">
@@ -378,20 +405,20 @@ export default function OnboardingPage() {
               <div className="p-3 rounded-xl bg-slate-100/90 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 text-xs space-y-1.5 mt-3">
                 <p className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
                   <Sparkles className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                  <span>What do Cut, Bulk, and Recomp mean?</span>
+                  <span>Nutrition Blueprint &amp; Weight Goals Explained:</span>
                 </p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5 text-[11px] text-slate-600 dark:text-slate-300">
                   <p>
-                    • <strong className="text-emerald-700 dark:text-emerald-400">Cut (Reduce Fat):</strong> Eat in a -500 kcal deficit to burn fat and reveal muscle definition while shielding muscle with 165g protein.
+                    • <strong className="text-purple-700 dark:text-purple-400">Achieving Target Weight:</strong> Calibrates daily deficit or surplus to reach your specified target weight with tailored weekly pace.
                   </p>
                   <p>
-                    • <strong className="text-blue-700 dark:text-blue-400">Bulk (Build Muscle):</strong> Eat in a +400 kcal surplus to lift heavier weights and grow bigger muscle mass.
+                    • <strong className="text-emerald-700 dark:text-emerald-400">Weight Loss (Cut):</strong> Standard -500 kcal deficit to burn fat and reveal muscle definition while shielding muscle with 165g protein.
                   </p>
                   <p>
-                    • <strong className="text-amber-700 dark:text-amber-400">Normal (Maintain):</strong> Eat at 0 kcal delta to stay at the exact same weight.
+                    • <strong className="text-blue-700 dark:text-blue-400">Weight Gain (Bulk):</strong> Controlled +400 kcal surplus to lift heavier weights and build muscle mass.
                   </p>
                   <p>
-                    • <strong className="text-purple-700 dark:text-purple-400">Recomp:</strong> Lose fat &amp; build muscle at the same time while keeping scale weight identical.
+                    • <strong className="text-amber-700 dark:text-amber-400">Normal (Maintain):</strong> Eat at 0 kcal delta (100% of TDEE) to stay at the exact same weight.
                   </p>
                 </div>
               </div>
@@ -399,6 +426,45 @@ export default function OnboardingPage() {
             <CardContent className="space-y-6">
               {/* Goal Selector */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {/* 1. Achieving Target Weight Pathway */}
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, fitnessGoal: "target_weight" })}
+                  className={`p-4 rounded-xl border text-left transition-all col-span-2 sm:col-span-4 ${
+                    formData.fitnessGoal === "target_weight"
+                      ? "border-purple-600 bg-purple-50/90 dark:bg-purple-950/70 ring-2 ring-purple-600 shadow-sm"
+                      : "border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-purple-300"
+                  }`}
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="p-1.5 rounded-lg bg-purple-600 text-white">
+                          <Target className="w-4 h-4" />
+                        </span>
+                        <span className="font-extrabold text-sm text-purple-950 dark:text-purple-200 uppercase tracking-wide">
+                          Achieving Target Weight ({protocolsData.targetWeightKg} kg)
+                        </span>
+                        <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-purple-200 dark:bg-purple-900 text-purple-800 dark:text-purple-300">
+                          {protocolsData.protocols.target_weight.badge}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-600 dark:text-slate-300">
+                        {protocolsData.targetWeightAnalysis?.targetPaceDescription}
+                      </p>
+                    </div>
+
+                    <div className="text-left sm:text-right shrink-0">
+                      <div className="text-xl font-black text-purple-700 dark:text-purple-300">
+                        {protocolsData.protocols.target_weight.calories} <span className="text-xs font-normal text-slate-500">kcal/day</span>
+                      </div>
+                      <div className="text-[11px] text-slate-500 font-semibold">
+                        {protocolsData.protocols.target_weight.proteinGrams}g Protein • {protocolsData.protocols.target_weight.carbsGrams}g Carbs • {protocolsData.protocols.target_weight.fatGrams}g Fat
+                      </div>
+                    </div>
+                  </div>
+                </button>
+
                 <button
                   type="button"
                   onClick={() => setFormData({ ...formData, fitnessGoal: "fat_loss" })}

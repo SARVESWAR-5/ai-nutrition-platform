@@ -29,6 +29,7 @@ import {
   X,
   Plus,
   LogIn,
+  Target,
 } from "lucide-react";
 
 export default function ProfilePage() {
@@ -39,7 +40,7 @@ export default function ProfilePage() {
     heightCm: "" as number | "",
     currentWeightKg: "" as number | "",
     targetWeightKg: "" as number | "",
-    fitnessGoal: "fat_loss" as "fat_loss" | "muscle_gain" | "recomposition" | "maintenance",
+    fitnessGoal: "target_weight" as "target_weight" | "fat_loss" | "muscle_gain" | "recomposition" | "maintenance",
     activityLevel: "moderate" as "sedentary" | "light" | "moderate" | "very_active" | "extra_active",
     preferredDinnerCutoff: "19:00",
     foodsAvoided: [] as string[],
@@ -48,26 +49,28 @@ export default function ProfilePage() {
 
   // Active selected goal protocol for side-by-side comparison
   const [selectedProtocolKey, setSelectedProtocolKey] = React.useState<
-    "fat_loss" | "muscle_gain" | "maintenance" | "recomposition"
-  >("fat_loss");
+    "target_weight" | "fat_loss" | "muscle_gain" | "maintenance" | "recomposition"
+  >("target_weight");
 
   // Dynamic Evidence-Based Bodybuilding Recalculation (live on every keystroke)
   const protocolsData: BodybuildingProtocolsComparison = React.useMemo(() => {
     const ageNum = typeof profile.age === "number" ? profile.age : Number(profile.age) || 25;
     const heightNum = typeof profile.heightCm === "number" ? profile.heightCm : Number(profile.heightCm) || 170;
     const weightNum = typeof profile.currentWeightKg === "number" ? profile.currentWeightKg : Number(profile.currentWeightKg) || 70;
+    const targetWeightNum = typeof profile.targetWeightKg === "number" ? profile.targetWeightKg : Number(profile.targetWeightKg) || weightNum;
 
     return calculateBodybuildingProtocols({
       age: ageNum,
       sex: profile.sex,
       heightCm: heightNum,
       currentWeightKg: weightNum,
+      targetWeightKg: targetWeightNum,
       activityLevel: profile.activityLevel,
     });
-  }, [profile.age, profile.sex, profile.heightCm, profile.currentWeightKg, profile.activityLevel]);
+  }, [profile.age, profile.sex, profile.heightCm, profile.currentWeightKg, profile.targetWeightKg, profile.activityLevel]);
 
   const normalBaseline = protocolsData.protocols.maintenance;
-  const activeProtocol = protocolsData.protocols[selectedProtocolKey];
+  const activeProtocol = protocolsData.protocols[selectedProtocolKey] || protocolsData.protocols.target_weight;
 
   // Active manual targets (synchronized with selected protocol)
   const [targets, setTargets] = React.useState({
@@ -110,9 +113,9 @@ export default function ProfilePage() {
   }, []);
 
   // When selected protocol or weight/age changes, automatically update all macro targets!
-  const handleSelectProtocol = (key: "fat_loss" | "muscle_gain" | "maintenance" | "recomposition") => {
+  const handleSelectProtocol = (key: "target_weight" | "fat_loss" | "muscle_gain" | "maintenance" | "recomposition") => {
     setSelectedProtocolKey(key);
-    const p = protocolsData.protocols[key];
+    const p = protocolsData.protocols[key] || protocolsData.protocols.target_weight;
     setTargets({
       calories: p.calories,
       protein: p.proteinGrams,
@@ -297,6 +300,30 @@ export default function ProfilePage() {
                   className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-sm font-semibold"
                 />
               </div>
+
+              {/* Live Target Weight Criteria Feedback */}
+              {Number(profile.currentWeightKg) > 0 && Number(profile.targetWeightKg) > 0 && (
+                <div className="sm:col-span-2 p-3.5 rounded-xl bg-purple-50/80 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800 text-xs">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Target className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0" />
+                      <span className="font-extrabold text-purple-950 dark:text-purple-200">
+                        {protocolsData.targetWeightAnalysis?.action === "reduce"
+                          ? `Weight Reduction Goal: Reduce ${Math.abs(protocolsData.targetWeightAnalysis.weightDeltaKg)} kg`
+                          : protocolsData.targetWeightAnalysis?.action === "gain"
+                          ? `Weight Gain Goal: Gain +${protocolsData.targetWeightAnalysis.weightDeltaKg} kg`
+                          : "Weight Maintenance Goal: Steady State"}
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-purple-200 dark:bg-purple-900 text-purple-800 dark:text-purple-200">
+                      {protocolsData.targetWeightAnalysis?.action === "reduce" ? "Cut Protocol" : protocolsData.targetWeightAnalysis?.action === "gain" ? "Bulk Protocol" : "Maintain"}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-1">
+                    {protocolsData.targetWeightAnalysis?.targetPaceDescription}
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -455,6 +482,45 @@ export default function ProfilePage() {
 
               {/* Goal Selection Buttons */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2">
+                {/* Achieving Target Weight Criteria Button */}
+                <button
+                  type="button"
+                  onClick={() => handleSelectProtocol("target_weight")}
+                  className={`p-3.5 rounded-xl border text-left transition-all col-span-2 sm:col-span-4 ${
+                    selectedProtocolKey === "target_weight"
+                      ? "border-purple-600 bg-purple-50/90 dark:bg-purple-950/70 ring-2 ring-purple-600 shadow-md"
+                      : "border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-purple-300"
+                  }`}
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="p-1.5 rounded-lg bg-purple-600 text-white">
+                          <Target className="w-4 h-4" />
+                        </span>
+                        <span className="font-extrabold text-sm text-purple-950 dark:text-purple-200 uppercase tracking-wide">
+                          Achieving Target Weight ({protocolsData.targetWeightKg} kg)
+                        </span>
+                        <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-purple-200 dark:bg-purple-900 text-purple-800 dark:text-purple-300">
+                          {protocolsData.protocols.target_weight.badge}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-600 dark:text-slate-300">
+                        {protocolsData.targetWeightAnalysis?.targetPaceDescription}
+                      </p>
+                    </div>
+
+                    <div className="text-left sm:text-right shrink-0">
+                      <div className="text-xl font-black text-purple-700 dark:text-purple-300">
+                        {protocolsData.protocols.target_weight.calories} <span className="text-xs font-normal text-slate-500">kcal/day</span>
+                      </div>
+                      <div className="text-[11px] text-slate-500 font-semibold">
+                        {protocolsData.protocols.target_weight.proteinGrams}g Protein • {protocolsData.protocols.target_weight.carbsGrams}g Carbs • {protocolsData.protocols.target_weight.fatGrams}g Fat
+                      </div>
+                    </div>
+                  </div>
+                </button>
+
                 <button
                   type="button"
                   onClick={() => handleSelectProtocol("fat_loss")}

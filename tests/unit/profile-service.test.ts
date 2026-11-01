@@ -103,4 +103,67 @@ describe("ProfileService & Bodybuilding Evidence-Based Formulas", () => {
     expect(bulk.proteinGrams).toBe(150); // 2.0g/kg
     expect(bulk.carbsGrams).toBeGreaterThan(normal.carbsGrams);
   });
+
+  it("dynamically calculates Achieving Target Weight criteria based on targetWeightKg", () => {
+    // Case 1: Target Weight < Current Weight (Weight Reduction / Deficit)
+    const cutData = calculateBodybuildingProtocols({
+      age: 21,
+      sex: "male",
+      heightCm: 175.5,
+      currentWeightKg: 75.0,
+      targetWeightKg: 70.0,
+      activityLevel: "moderate",
+    });
+
+    const cutTarget = cutData.protocols.target_weight;
+    expect(cutTarget).toBeDefined();
+    expect(cutTarget.targetWeightMeta?.action).toBe("reduce");
+    expect(cutTarget.targetWeightMeta?.weightDeltaKg).toBe(-5);
+    expect(cutTarget.calorieDelta).toBe(-500);
+    expect(cutTarget.calories).toBe(2208); // 2708 - 500
+    expect(cutTarget.proteinPerKg).toBe(2.2); // elevated to preserve lean tissue
+    expect(cutTarget.proteinGrams).toBe(165);
+    expect(cutTarget.targetWeightMeta?.weeklyRateKg).toBe(0.5);
+    expect(cutTarget.targetWeightMeta?.estimatedWeeks).toBe(10); // 5 / 0.5 = 10 weeks
+
+    // Case 2: Target Weight > Current Weight (Weight Gain / Surplus)
+    const bulkData = calculateBodybuildingProtocols({
+      age: 21,
+      sex: "male",
+      heightCm: 175.5,
+      currentWeightKg: 75.0,
+      targetWeightKg: 82.0,
+      activityLevel: "moderate",
+    });
+
+    const bulkTarget = bulkData.protocols.target_weight;
+    expect(bulkTarget).toBeDefined();
+    expect(bulkTarget.targetWeightMeta?.action).toBe("gain");
+    expect(bulkTarget.targetWeightMeta?.weightDeltaKg).toBe(7);
+    expect(bulkTarget.calorieDelta).toBe(400);
+    expect(bulkTarget.calories).toBe(3108); // 2708 + 400
+    expect(bulkTarget.proteinPerKg).toBe(2.0);
+    expect(bulkTarget.proteinGrams).toBe(150);
+    expect(bulkTarget.targetWeightMeta?.weeklyRateKg).toBe(0.35);
+    expect(bulkTarget.targetWeightMeta?.estimatedWeeks).toBe(20); // Math.ceil(7 / 0.35) = 20 weeks
+
+    // Case 3: Target Weight === Current Weight (Maintenance)
+    const maintainData = calculateBodybuildingProtocols({
+      age: 21,
+      sex: "male",
+      heightCm: 175.5,
+      currentWeightKg: 75.0,
+      targetWeightKg: 75.0,
+      activityLevel: "moderate",
+    });
+
+    const maintainTarget = maintainData.protocols.target_weight;
+    expect(maintainTarget).toBeDefined();
+    expect(maintainTarget.targetWeightMeta?.action).toBe("maintain");
+    expect(maintainTarget.targetWeightMeta?.weightDeltaKg).toBe(0);
+    expect(maintainTarget.calorieDelta).toBe(0);
+    expect(maintainTarget.calories).toBe(2708);
+    expect(maintainTarget.proteinPerKg).toBe(2.0);
+    expect(maintainTarget.targetWeightMeta?.estimatedWeeks).toBe(0);
+  });
 });

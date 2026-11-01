@@ -11,7 +11,7 @@ export const UserProfileSchema = z.object({
   heightCm: z.number().positive("Height must be positive"),
   currentWeightKg: z.number().positive("Weight must be positive"),
   targetWeightKg: z.number().positive().optional(),
-  fitnessGoal: z.enum(["fat_loss", "muscle_gain", "recomposition", "maintenance"]),
+  fitnessGoal: z.enum(["fat_loss", "muscle_gain", "recomposition", "maintenance", "target_weight"]),
   activityLevel: z.enum(["sedentary", "light", "moderate", "very_active", "extra_active"]),
   gymFrequency: z.string().default("4-5 days/week"),
   workoutType: z.string().default("Strength training & cardio"),
@@ -103,7 +103,7 @@ export const ACTIVITY_MULTIPLIERS = {
 } as const;
 
 export interface BodybuildingGoalProtocol {
-  key: "maintenance" | "fat_loss" | "muscle_gain" | "recomposition";
+  key: "maintenance" | "fat_loss" | "muscle_gain" | "recomposition" | "target_weight";
   label: string;
   sublabel: string;
   badge: string;
@@ -116,36 +116,58 @@ export interface BodybuildingGoalProtocol {
   fibreGrams: number;
   waterMl: number;
   scientificFormulaNotes: string;
+  targetWeightMeta?: {
+    currentWeightKg: number;
+    targetWeightKg: number;
+    weightDeltaKg: number;
+    action: "reduce" | "gain" | "maintain";
+    estimatedWeeks: number;
+    weeklyRateKg: number;
+    targetPaceDescription: string;
+  };
 }
 
 export interface BodybuildingProtocolsComparison {
   bmr: number;
   maintenanceTdee: number;
   currentWeightKg: number;
+  targetWeightKg?: number;
+  targetWeightAnalysis?: {
+    currentWeightKg: number;
+    targetWeightKg: number;
+    weightDeltaKg: number;
+    action: "reduce" | "gain" | "maintain";
+    estimatedWeeks: number;
+    weeklyRateKg: number;
+    targetPaceDescription: string;
+  };
   protocols: {
     maintenance: BodybuildingGoalProtocol;
     fat_loss: BodybuildingGoalProtocol;
     muscle_gain: BodybuildingGoalProtocol;
     recomposition: BodybuildingGoalProtocol;
+    target_weight: BodybuildingGoalProtocol;
   };
 }
 
 /**
  * Bodybuilding Evidence-Based Multi-Goal Protocol Engine.
  * Automatically recalculates exact target grams across:
- * 1. Normal Maintenance Baseline (TDEE)
- * 2. Weight Loss (Cutting: -500 kcal deficit, 2.2g/kg protein to prevent muscle wasting)
- * 3. Weight Gain (Bulking: +400 kcal clean surplus, 2.0g/kg protein for maximum hypertrophy)
- * 4. Body Recomposition (TDEE, 2.1g/kg protein)
+ * 1. Target Weight Achievement (Dynamic Deficit/Surplus/Equilibrium based on Target Weight)
+ * 2. Normal Maintenance Baseline (TDEE)
+ * 3. Weight Loss (Cutting: -500 kcal deficit, 2.2g/kg protein to prevent muscle wasting)
+ * 4. Weight Gain (Bulking: +400 kcal clean surplus, 2.0g/kg protein for maximum hypertrophy)
+ * 5. Body Recomposition (TDEE, 2.1g/kg protein)
  */
 export function calculateBodybuildingProtocols(params: {
   age: number;
   sex: "male" | "female" | "other";
   heightCm: number;
   currentWeightKg: number;
+  targetWeightKg?: number;
   activityLevel: keyof typeof ACTIVITY_MULTIPLIERS;
 }): BodybuildingProtocolsComparison {
-  const { age, sex, heightCm, currentWeightKg, activityLevel } = params;
+  const { age, sex, heightCm, currentWeightKg, targetWeightKg, activityLevel } = params;
 
   // 1. Calculate BMR (Mifflin-St Jeor)
   let bmr: number;
@@ -162,14 +184,15 @@ export function calculateBodybuildingProtocols(params: {
 
   // Helper to build macro breakdown with 4-4-9 deterministic math
   const buildProtocol = (
-    key: "maintenance" | "fat_loss" | "muscle_gain" | "recomposition",
+    key: "maintenance" | "fat_loss" | "muscle_gain" | "recomposition" | "target_weight",
     label: string,
     sublabel: string,
     badge: string,
     calorieDelta: number,
     proteinPerKg: number,
     fatPercentage: number,
-    scientificNotes: string
+    scientificNotes: string,
+    targetWeightMeta?: BodybuildingGoalProtocol["targetWeightMeta"]
   ): BodybuildingGoalProtocol => {
     const calories = Math.max(1300, maintenanceTdee + calorieDelta);
     const proteinGrams = Math.round(proteinPerKg * currentWeightKg);
@@ -195,6 +218,7 @@ export function calculateBodybuildingProtocols(params: {
       fibreGrams,
       waterMl,
       scientificFormulaNotes: scientificNotes,
+      targetWeightMeta,
     };
   };
 
@@ -242,11 +266,83 @@ export function calculateBodybuildingProtocols(params: {
     "Isocaloric protocol with high protein (2.1g/kg) and progressive overload training."
   );
 
+  // Dynamic Target Weight Analysis and Protocol
+  const safeTargetWeight = targetWeightKg && targetWeightKg > 20 ? targetWeightKg : currentWeightKg;
+  const weightDiff = Math.round((safeTargetWeight - currentWeightKg) * 10) / 10;
+  let action: "reduce" | "gain" | "maintain" = "maintain";
+  let targetDeltaKcal = 0;
+  let targetProteinPerKg = 2.0;
+  let estimatedWeeks = 0;
+  let weeklyRateKg = 0;
+  let targetPaceDescription = "";
+
+  if (weightDiff < -0.2) {
+    action = "reduce";
+    const deltaAbs = Math.abs(weightDiff);
+    weeklyRateKg = 0.5;
+    estimatedWeeks = Math.max(1, Math.ceil(deltaAbs / weeklyRateKg));
+    targetDeltaKcal = -500;
+    targetProteinPerKg = 2.2;
+    targetPaceDescription = `Targeting -${deltaAbs} kg weight reduction (~0.5 kg/week healthy fat loss) to reach ${safeTargetWeight} kg in ~${estimatedWeeks} weeks`;
+  } else if (weightDiff > 0.2) {
+    action = "gain";
+    const deltaAbs = weightDiff;
+    weeklyRateKg = 0.35;
+    estimatedWeeks = Math.max(1, Math.ceil(deltaAbs / weeklyRateKg));
+    targetDeltaKcal = 400;
+    targetProteinPerKg = 2.0;
+    targetPaceDescription = `Targeting +${deltaAbs} kg lean mass gain (~0.35 kg/week clean surplus) to reach ${safeTargetWeight} kg in ~${estimatedWeeks} weeks`;
+  } else {
+    action = "maintain";
+    weeklyRateKg = 0;
+    estimatedWeeks = 0;
+    targetDeltaKcal = 0;
+    targetProteinPerKg = 2.0;
+    targetPaceDescription = `Current weight (${currentWeightKg} kg) matches target weight (${safeTargetWeight} kg). Normal maintenance protocol active.`;
+  }
+
+  const targetWeightMeta = {
+    currentWeightKg,
+    targetWeightKg: safeTargetWeight,
+    weightDeltaKg: weightDiff,
+    action,
+    estimatedWeeks,
+    weeklyRateKg,
+    targetPaceDescription,
+  };
+
+  const target_weight = buildProtocol(
+    "target_weight",
+    action === "reduce"
+      ? `Achieving Target Weight (${safeTargetWeight} kg • Reduce)`
+      : action === "gain"
+      ? `Achieving Target Weight (${safeTargetWeight} kg • Gain)`
+      : `Achieving Target Weight (${safeTargetWeight} kg • Maintain)`,
+    action === "reduce"
+      ? `Reduce ${Math.abs(weightDiff)} kg in ~${estimatedWeeks} wks`
+      : action === "gain"
+      ? `Gain +${weightDiff} kg in ~${estimatedWeeks} wks`
+      : "Target weight maintained",
+    action === "reduce"
+      ? `Deficit (-500 kcal)`
+      : action === "gain"
+      ? `Surplus (+400 kcal)`
+      : "Baseline (0 kcal)",
+    targetDeltaKcal,
+    targetProteinPerKg,
+    0.25,
+    `${targetPaceDescription}. Nutrients deterministically calculated to achieve ${safeTargetWeight} kg.`,
+    targetWeightMeta
+  );
+
   return {
     bmr: roundedBmr,
     maintenanceTdee,
     currentWeightKg,
+    targetWeightKg: safeTargetWeight,
+    targetWeightAnalysis: targetWeightMeta,
     protocols: {
+      target_weight,
       maintenance,
       fat_loss,
       muscle_gain,

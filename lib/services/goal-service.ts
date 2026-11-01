@@ -44,7 +44,7 @@ export interface GoalComparison {
 export interface GoalRevision {
   id: string;
   effectiveFrom: string; // YYYY-MM-DD
-  goalType: "maintenance" | "bulking" | "cutting" | "recomposition";
+  goalType: "maintenance" | "bulking" | "cutting" | "recomposition" | "target_weight";
   reason: string;
   targets: UserNutritionGoals;
   createdAt: string;
@@ -246,7 +246,7 @@ class GoalService {
    */
   public addGoalRevision(params: {
     effectiveFrom: string;
-    goalType: "maintenance" | "bulking" | "cutting" | "recomposition";
+    goalType: "maintenance" | "bulking" | "cutting" | "recomposition" | "target_weight";
     reason: string;
     targets: Omit<UserNutritionGoals, "effectiveFrom">;
   }): GoalRevision {

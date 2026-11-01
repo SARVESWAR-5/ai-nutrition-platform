@@ -6,6 +6,7 @@ import { Navigation } from "@/components/navigation";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { goalService, GoalRevision, DEFAULT_NUTRITION_TARGETS } from "@/lib/services/goal-service";
+import { getUserProfileData, calculateBodybuildingProtocols } from "@/lib/services/profile-service";
 import { getLocalTodayDateString } from "@/lib/date/date-service";
 import { History, ShieldAlert, ArrowRight, Target, PlusCircle, CheckCircle2, Calendar } from "lucide-react";
 
@@ -16,7 +17,7 @@ export default function GoalsPage() {
 
   // Form State
   const [effectiveFrom, setEffectiveFrom] = React.useState(getLocalTodayDateString());
-  const [goalType, setGoalType] = React.useState<"maintenance" | "bulking" | "cutting" | "recomposition">("recomposition");
+  const [goalType, setGoalType] = React.useState<"target_weight" | "maintenance" | "bulking" | "cutting" | "recomposition">("recomposition");
   const [reason, setReason] = React.useState("Scheduled phase transition");
   const [calories, setCalories] = React.useState(2400);
   const [protein, setProtein] = React.useState(150);
@@ -37,9 +38,29 @@ export default function GoalsPage() {
     return () => window.removeEventListener("sarveswar-targets-updated", handleUpdate);
   }, [loadData]);
 
-  const handleApplyPreset = (type: "maintenance" | "bulking" | "cutting" | "recomposition") => {
+  const handleApplyPreset = (type: "target_weight" | "maintenance" | "bulking" | "cutting" | "recomposition") => {
     setGoalType(type);
-    if (type === "cutting") {
+    if (type === "target_weight") {
+      const prof = getUserProfileData();
+      const current = prof?.currentWeightKg || 75;
+      const target = prof?.targetWeightKg || current;
+      const proto = calculateBodybuildingProtocols({
+        age: prof?.age || 21,
+        sex: prof?.sex || "male",
+        heightCm: prof?.heightCm || 175.5,
+        currentWeightKg: current,
+        targetWeightKg: target,
+        activityLevel: (prof?.activityLevel as any) || "moderate",
+      });
+      const p = proto.protocols.target_weight;
+      setCalories(p.calories);
+      setProtein(p.proteinGrams);
+      setCarbs(p.carbsGrams);
+      setFat(p.fatGrams);
+      setFibre(p.fibreGrams);
+      setWaterMl(p.waterMl);
+      setReason(`Achieving Target Weight (${target} kg): ${p.sublabel}`);
+    } else if (type === "cutting") {
       setCalories(1900);
       setProtein(165);
       setCarbs(175);
@@ -154,20 +175,28 @@ export default function GoalsPage() {
                 {/* Objective Presets */}
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Quick Objective:</span>
-                  {(["maintenance", "bulking", "cutting", "recomposition"] as const).map((t) => (
-                    <button
-                      key={t}
-                      type="button"
-                      onClick={() => handleApplyPreset(t)}
-                      className={`px-3 py-1 rounded-lg text-xs font-bold capitalize transition-colors ${
-                        goalType === t
-                          ? "bg-emerald-600 text-white"
-                          : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200"
-                      }`}
-                    >
-                      {t}
-                    </button>
-                  ))}
+                  {(["target_weight", "cutting", "bulking", "maintenance", "recomposition"] as const).map((t) => {
+                    const label =
+                      t === "target_weight" ? "🎯 Target Weight Goal" :
+                      t === "cutting" ? "Weight Loss" :
+                      t === "bulking" ? "Weight Gain" :
+                      t === "maintenance" ? "Normal" :
+                      "Recomposition";
+                    return (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => handleApplyPreset(t)}
+                        className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors ${
+                          goalType === t
+                            ? "bg-emerald-600 text-white shadow-sm"
+                            : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
